@@ -1,86 +1,84 @@
-
+import re
 import streamlit as st
-from google import genai
-import os
-from dotenv import load_dotenv
 
-load_dotenv()
 
-api_key = os.getenv("GEMINI_API_KEY")
+def slug_title(line: str, index: int) -> str:
+    text = re.sub(r"^\s*(week|module|unit|lesson)\s*\d*\s*[:.\-]?\s*", "", line, flags=re.I).strip()
+    return text or f"Module {index}"
 
-client = genai.Client(api_key=api_key)
 
-# --- App UI Setup ---
+def build_course_markdown(syllabus: str) -> str:
+    entries = [line.strip(" -\t") for line in syllabus.splitlines() if line.strip()]
+    if not entries:
+        return ""
+
+    sections = ["# Course Material", "", "Generated locally from the supplied syllabus. No external AI/API service is used.", ""]
+    for index, entry in enumerate(entries, 1):
+        title = slug_title(entry, index)
+        sections.extend([
+            f"## Module {index}: {title}",
+            "",
+            "### Overview",
+            f"This module covers **{title}** based on the supplied syllabus item: _{entry}_.",
+            "",
+            "### Learning Objectives",
+            f"- Explain the key concepts associated with {title}.",
+            f"- Apply the main principles of {title} in guided activities.",
+            f"- Check understanding through a short assessment or reflection.",
+            "",
+            "### Lesson Focus",
+            f"- Core terminology and concepts for {title}",
+            f"- Practical examples and applications of {title}",
+            f"- Common errors, limitations, or safety considerations where relevant",
+            "",
+            "### Suggested Activity",
+            f"Create one short exercise, example, or discussion task that demonstrates {title}.",
+            "",
+            "### Assessment",
+            f"Use a brief quiz, worksheet, demonstration, or reflection to verify understanding of {title}.",
+            "",
+            "### Summary",
+            f"Review the essential ideas, applications, and takeaways for {title}.",
+            "",
+        ])
+    return "\n".join(sections).strip() + "\n"
+
+
 st.set_page_config(page_title="Course Framework", page_icon="🛩️", layout="centered")
 st.title("🛩️ Course Framework")
-st.write("Convert a simple syllabus into structured Markdown course material instantly, or view existing materials.")
+st.write("Convert a syllabus into a structured Markdown course framework locally, or preview existing Markdown materials.")
 
-# --- Layout: Tabs ---
 tab1, tab2 = st.tabs(["✨ Generate Course", "📄 View .md File"])
 
 with tab1:
-    # --- User Input ---
     syllabus_input = st.text_area(
-        "Type/ Paste your Syllabus here:", 
-        height=200, 
+        "Type / paste your syllabus here:",
+        height=200,
         placeholder="e.g., Week 1: Introduction to Python\nWeek 2: Data Structures..."
     )
-    
-    # --- Generation Trigger ---
+
     if st.button("Generate Course Material"):
         if not syllabus_input.strip():
             st.warning("Please enter a syllabus first.")
         else:
-            with st.spinner("Generating structured course material..."):
-                try:
-                    # Prompt enforcing strict instructional design rules
-                    prompt = f"""
-                    You are an expert curriculum developer and instructional designer. 
-                    Convert the following syllabus into comprehensive, structured course material.
-                    
-                    Rules:
-                    1. Output MUST be strictly in Markdown format.
-                    2. Include headers for each module/week.
-                    3. Under each header, include a brief introduction, detailed lesson points, and a concluding summary.
-                    4. Do not include conversational filler; output only the course material.
-                    
-                    Syllabus:
-                    {syllabus_input}
-                    """
-                    
-                    # Call the model
-                    response = client.models.generate_content(
-                        model="gemini-3.1-flash-lite",
-                        contents=prompt
-                    )
-                    
-                    st.success("Course generated successfully!")
-                    
-                    # --- Export and Preview ---
-                    st.download_button(
-                        label="⬇️ Download Markdown File",
-                        data=response.text,
-                        file_name="course_material.md",
-                        mime="text/markdown"
-                    )
-                    
-                    st.markdown("---")
-                    st.markdown("### Preview")
-                    st.markdown(response.text)
-                    
-                except Exception as e:
-                    st.error(f"An error occurred: {e}")
+            course_markdown = build_course_markdown(syllabus_input)
+            st.success("Course framework generated locally.")
+            st.download_button(
+                label="⬇️ Download Markdown File",
+                data=course_markdown,
+                file_name="course_material.md",
+                mime="text/markdown"
+            )
+            st.markdown("---")
+            st.markdown("### Preview")
+            st.markdown(course_markdown)
 
 with tab2:
-    # --- File Upload and Viewer ---
     st.subheader("Upload Existing Course Material")
     uploaded_file = st.file_uploader("Upload a Markdown (.md) file to preview it", type=["md"])
-    
+
     if uploaded_file is not None:
-        # Read and decode the file content
         markdown_content = uploaded_file.getvalue().decode("utf-8")
-        
         st.markdown("---")
         st.markdown("### Document Preview")
-        # Render the markdown directly in Streamlit
         st.markdown(markdown_content)

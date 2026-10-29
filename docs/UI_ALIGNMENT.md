@@ -1,26 +1,22 @@
-# Aero Academy interface alignment
+# Aero Academy alignment and direct workflow
 
-Course Framework adopts Aero Academy's white/navy/gold visual language for future integration. Reference inspected: `Denberg28/Aeronautical-Open-Academy` main, `MainActivity.java` and `WorkspaceActivity.java` (29 October 2026). The current reference repository exposes the Android workspace; Windows Academy visual parity still needs side-by-side acceptance with the deployed Academy desktop build.
+Reference: `Denberg28/Aeronautical-Open-Academy` main, `MainActivity.java` and `WorkspaceActivity.java`, inspected 29 October 2026. Course Framework keeps its white/navy/gold palette while simplifying authoring to **paste → select agent → Generate → review → Use draft → Save/Export**.
 
-| Token / pattern | Course Framework |
+| Token | Value |
 |---|---|
 | Paper | `#ffffff` |
-| Navy text / primary actions | `#102640` |
+| Navy | `#102640` |
 | Secondary text | `#536174` |
 | Dividers | `#e4e9f0` |
-| Field background | `#fafbfd` |
-| Selected navigation | `#e6b844` |
+| Fields | `#fafbfd` |
+| Highlight | `#e6b844` |
 | Selection tint | `#fff7df` |
-| Desktop type | Segoe UI, 10 pt body; 11 pt sections; 18 pt app title |
-| Navigation | Compact left rail; Syllabus → Review draft → Course editor; Engine settings |
-| Actions | New/Open/Save/Save as/Export in the top bar; Generate in the footer; acceptance beside the draft title |
+| Desktop font | Segoe UI, 10 pt body, 11 pt section, 18 pt app title |
 
-`academy_theme.py` owns reusable visual tokens and Tk styles. The optional Streamlit interface uses the same palette and compact headings; `.streamlit/config.toml` supplies its native theme. Responsive helper labels wrap within their panel; native keyboard editing and focus indicators remain available. Alt+1/2/3/4 opens Syllabus/Review draft/Course editor/Engine settings. Ctrl+O and Ctrl+S retain Open and Save.
+Windows uses one split workspace, with model/key/scope controls beside a draft or accepted course. Settings and File contain secondary options. Streamlit uses one page, a model dropdown, and Settings & files; import/outline review are optional. Draft acceptance remains explicit so new output never silently replaces accepted teaching material.
 
-This change prepares the authoring interface visually. It does not connect Academy accounts, publish subjects, map course modules into Academy materials, or modify the version-1 course project/export schema. Future integration must define a versioned import contract and preserve instructor review before publication. It can map an accepted course to an Academy subject and its modules to materials after that contract is implemented.
+`academy_theme.py` centralizes the palette. The old left rail, four workflow pages, standalone engine page, revision instruction row, and duplicate export buttons were removed. Ctrl+O/Ctrl+S remain. Agent selection is a single model choice per generation, not an autonomous multi-agent team.
 
-Review native captures with `python tools/capture_ui.py ui-review` on Windows or an X display. CI retains screenshots for the syllabus, accepted-course editor, and settings at minimum size. Screenshots use the real Tk UI and sample syllabus, with no provider calls or credentials. Native automated minimum-size bounds checks are distinct from manual high-DPI and assistive-technology acceptance.
+Windows CI captures actual native widgets with `python tools/capture_ui.py ui-review`. The older `docs/evidence/aero-ui-linux-preview.png` is historical rc.2 evidence and does not represent the new workspace. Manual side-by-side Academy desktop, high-DPI, keyboard, and screen-reader acceptance remain pending.
 
-![Course Framework syllabus workspace, Linux native capture](evidence/aero-ui-linux-preview.png)
-
-Preview: real Tk widgets on Xvfb Linux; the Linux font fallback differs from Windows Segoe UI.
+This prepares visual integration. Academy accounts, course/material import contracts, and instructor publication are not implemented.

@@ -1,11 +1,13 @@
-# Course Framework 0.1.0-rc.3 — Windows test candidate
+# Course Framework 0.2.0-rc.1 — Direct course workflow
 
-Match the Course Framework authoring workspace to Aero Academy’s minimal white/navy/gold design. Compact left navigation follows Syllabus → Review draft → Course editor, with Engine settings alongside. File actions share a single top bar; helper text wraps; provider guidance opens on demand. Optional Streamlit headings and colors follow the same design.
+Paste a syllabus, choose an agent model, and Generate in one workspace. Review modules with lesson content, activities, assessments, and video resources, then Use draft and Save/Export. Streamlit no longer has workflow tabs; Windows places the syllabus/agent controls beside the course. File/provider options are secondary.
 
-Startup sizing also fits smaller supported displays (1024×768 and above) while keeping footer actions visible.
+Choose all modules or one module. Requests run one module at a time; failures retain completed modules and the accepted course. Resume continues unfinished work with the same syllabus/model/endpoint. Windows Pause finishes the current module before stopping. Save project keeps unfinished drafts; re-enter your session key when reopening. Preset Gemini models and custom IDs are selectable; availability depends on your provider account.
 
-Download the Windows x64 ZIP, extract the entire folder, and run CourseFramework.exe. Course JSON and exports retain their existing format. Keys remain session-only. This update prepares visual integration; Academy accounts, subject publishing, and data synchronization are not implemented.
+Video resources are topic search links and supplied YouTube/Vimeo URLs. Specific videos are not discovered or verified. Review all teaching content and resources before use. Offline generation produces explicit scaffolding/placeholders.
 
-Verification: regression tests, native Windows navigation/minimum-window checks, source startup, Windows packaging, and packaged EXE startup must pass in the linked Actions run before this candidate is published. Real Tk UI review captures are attached to that run. Provider tests use simulated responses; no live API key or paid request is used.
+Download the Windows x64 ZIP, extract the entire folder, and run CourseFramework.exe. Windows 10/11 x64, display 1024×768 or larger. Streamlit deployment: main/app.py, Python 3.12.
 
-Manual Windows 10/11 high-DPI/accessibility checks, direct visual comparison with the deployed Academy desktop, and live-provider validation remain pending. This is an unsigned prerelease, not a stable-readiness claim. See docs/TESTING.md and docs/KNOWN_ISSUES.md.
+Projects now use format 2 and include unfinished work plus model metadata, never API keys/endpoints. Format 1 projects migrate without losing accepted edits. Older app versions cannot open format 2; keep Markdown exports for rollback. Course export includes accepted content only.
+
+Required Linux/Windows tests, native startup, Windows packaging, packaged EXE startup, and UI captures must pass before publication. Provider tests use simulated responses. This is an unsigned prerelease; manual Windows/high-DPI/accessibility and live-provider acceptance remain pending. See docs/TESTING.md and docs/KNOWN_ISSUES.md.

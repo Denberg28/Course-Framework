@@ -22,7 +22,7 @@ jobs:
           python-version: '3.12'
           cache: pip
       - run: python -m pip install -r requirements.txt
-      - run: python -m compileall -q app.py desktop.py academy_theme.py course_core.py engines.py course_workflow.py tests tools
+      - run: python -m compileall -q app.py desktop.py academy_theme.py course_core.py engines.py course_workflow.py hosted_keys.py tests tools
       - run: git diff --check
       - run: python -m unittest discover -s tests -v
       - name: Native Windows startup

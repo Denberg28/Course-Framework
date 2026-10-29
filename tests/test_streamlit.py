@@ -66,6 +66,41 @@ class StreamlitTests(unittest.TestCase):
         self.click('Use draft')
         self.assertIn('## Module 5:', self.app.session_state['content'])
 
+    def test_hosted_gemini_secret_used_without_display_or_session_copy(self):
+        from course_core import project_bytes, make_project
+        app = AppTest.from_file('app.py', default_timeout=30)
+        app.secrets['GEMINI_API_KEY'] = 'fake-server-secret'
+        app.run()
+        self.assertFalse(app.exception)
+        self.assertFalse(any(w.key == 'api_key' for w in app.text_input))
+        self.assertIn('configured in Secrets', ' '.join(c.value for c in app.caption))
+        next(b for b in app.button if b.label == 'Example').click().run()
+        app.selectbox(key='module_scope').select(0).run()
+        app.checkbox(key='online_consent').check().run()
+        with patch('engines.request_json', return_value=response()) as send:
+            next(b for b in app.button if b.label == 'Generate').click().run()
+            self.assertEqual(send.call_args.args[1]['x-goog-api-key'], 'fake-server-secret')
+        self.assertFalse(app.exception)
+        self.assertNotIn('fake-server-secret', str(app.main))
+        self.assertNotIn('fake-server-secret', str(app.session_state.filtered_state))
+        data = project_bytes(make_project(app.session_state['source'], '', '', pending=app.session_state['pending']))
+        self.assertNotIn(b'fake-server-secret', data)
+
+    def test_hosted_secret_never_used_for_compatible_provider(self):
+        app = AppTest.from_file('app.py', default_timeout=30)
+        app.secrets['GEMINI_API_KEY'] = 'fake-server-secret'
+        app.run()
+        next(b for b in app.button if b.label == 'Example').click().run()
+        app.selectbox(key='provider').select('OpenAI-compatible').run()
+        app.text_input(key='custom_model').set_value('provider-model').run()
+        app.checkbox(key='online_consent').check().run()
+        with patch('engines.request_json') as send:
+            next(b for b in app.button if b.label == 'Generate').click().run()
+            send.assert_not_called()
+        self.assertTrue(app.error)
+        self.assertEqual(app.session_state['content'], '')
+        self.assertFalse(app.exception)
+
     def test_selected_module_and_existing_course_replacement_gate(self):
         self.sample_local()
         self.app.selectbox(key='module_scope').select(2).run()

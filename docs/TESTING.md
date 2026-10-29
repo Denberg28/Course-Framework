@@ -1,10 +1,10 @@
 # Verification and release gates
 
-Target: **0.2.0-rc.1**, baseline `dc53a28`. Evidence is automated and self-reviewed, with simulated provider responses. Live API and manual Windows/high-DPI/accessibility acceptance remain pending.
+Target: **0.2.0-rc.2**, baseline `338f43b`. Evidence is automated and self-reviewed, with simulated provider responses. Live API and manual Windows/high-DPI/accessibility acceptance remain pending.
 
 | Gate | Check |
 |---|---|
-| Source | `python -m compileall -q app.py desktop.py academy_theme.py course_core.py engines.py course_workflow.py tests tools`; `git diff --check` |
+| Source | `python -m compileall -q app.py desktop.py academy_theme.py course_core.py engines.py course_workflow.py hosted_keys.py tests tools`; `git diff --check` |
 | Core/persistence | File parsing/bounds; atomic failure retains prior file; v1→v2 migration; accepted edits and partial checkpoints round-trip; allow-lists exclude secrets |
 | Generation | One call per module; required sections; quota/truncation failure preserves previous success; resume does not replay completed modules; source/model/endpoint changes do not resume |
 | Resources | Topic searches URL-encode syllabus titles; supplied video links retained; new direct video links removed; no provider call in offline mode |
@@ -27,3 +27,7 @@ No user key, real paid API call, or live model availability probe is part of tes
 - Preserve v2 project and Markdown exports before any rollback. Prior releases cannot open format 2.
 
 Final test/commit/build/run evidence is attached to the GitHub workflow and release; this document does not claim those gates passed before they execute.
+
+## Hosted Secrets regression
+
+AppTest uses a fake deployment secret to verify Gemini request header placement, absence from rendered widgets/session/project data, provider isolation, manual fallback without Secrets, and sanitized invalid-secret errors. No live credential is used. The user confirmed that rebooting resolved the earlier deployed ImportError; no import-error workaround is included in this change.

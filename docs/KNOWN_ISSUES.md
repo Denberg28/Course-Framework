@@ -1,5 +1,6 @@
 # Known issues and validation limits
 
+- **Hosted Gemini secret:** everyone with access to the hosted app can use the configured key’s quota. Access is controlled by the deployment owner. Custom providers never receive this secret.
 - **Live AI not validated:** provider tests simulate responses. Preset IDs do not guarantee model/quota access. Generated facts, examples, answers, activity quality, syllabus alignment, and references require instructor review.
 - **Video resources:** YouTube search links and supplied YouTube/Vimeo URLs are available. There is no live video discovery, ranking, embedding, or link/content verification.
 - **Durability:** session memory retains completed modules after a provider failure. Save project before closing/reloading to preserve accepted content and unfinished drafts. There is no autosave or cloud account storage. A crash before saving can lose work.

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0-rc.2 — Streamlit Secrets key
+
+- Read a server-owned Gemini key from `st.secrets["GEMINI_API_KEY"]`; hide the API-key input when configured.
+- Keep the secret out of widget/session/project/export data and never use it for another provider. Manual keys remain an optional session-only fallback.
+- Document the exact Secrets TOML and shared hosted quota; add regression coverage with fake secrets and no live API calls.
+
+
 ## 0.2.0-rc.1 — Direct syllabus workflow
 
 - One workspace in Windows and Streamlit: paste syllabus, choose an agent model, Generate, review, Use draft, Save/Export. Move import, provider configuration, and project opening into Settings/File controls.

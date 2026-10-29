@@ -5,7 +5,7 @@ Paste a syllabus, choose an agent model, and generate modules with lesson conten
 ## Use it
 
 1. **Paste** your syllabus. Topics such as `Week 1: Aircraft loads` give the most predictable module boundaries.
-2. **Choose an agent model** and enter its API key. Gemini presets are `gemini-3.8-flash` and `gemini-3.5-flash-lite`; select/type a custom model ID when needed. Availability and quotas depend on your provider account.
+2. **Choose an agent model** and enter its API key if not configured in Streamlit Secrets. Gemini presets are `gemini-3.8-flash` and `gemini-3.5-flash-lite`; select/type a custom model ID when needed. Availability and quotas depend on your provider account.
 3. Select **all modules** or **one module**, allow sending the syllabus to the agent, then **Generate**. Each selected module uses one request; there is no automatic paid retry.
 4. **Review → Use draft.** Accepted material stays intact until you accept a complete draft. Edit the accepted course if needed.
 5. **Save project** to keep the syllabus, accepted edits, and unfinished modules. **Export course** produces a ZIP with Markdown, a printable HTML text view, the source syllabus, and a reopenable project.
@@ -26,7 +26,15 @@ One workspace contains the syllabus and agent controls beside the draft/course e
 
 Deployment configuration: repository **Denberg28/Course-Framework**, branch **main**, entrypoint **app.py**, Python **3.12**. The browser interface has one page with no workflow tabs; Settings & files contains import/open/provider controls. This repository does not establish or verify a public deployment.
 
-The key is entered in the app, kept only in session memory, and excluded from project/export data. The current app does not read `st.secrets`; no server API key is required. Switching providers clears the entered key and consent. Hosted compatible endpoints require public HTTPS; desktop compatible engines can use HTTP on localhost with an optional key. Syllabi and generated text are sent only after the explicit online consent and Generate action. Provider costs, quotas, and privacy policies apply.
+You can configure a deployment-owned Gemini key under **Manage app → Settings → Secrets**:
+
+```toml
+GEMINI_API_KEY = "PASTE_YOUR_GEMINI_API_KEY_HERE"
+```
+
+Save and reboot the app if needed. The app reads the key on the server and displays **Gemini key configured in Secrets** instead of an API-key input. It does not copy the key into widgets, session state, project files, exports, or URLs. This deployment key is used only for Google AI Studio (Gemini), never a custom provider. Everyone with access to the hosted app can use its quota; choose app access accordingly. Do not put a real key in GitHub. `.streamlit/secrets.toml` is ignored for local development.
+
+Without a configured Gemini secret, you can enter a manual key in the app; manual/desktop keys remain session-only. No key is required for offline scaffolding. Switching providers clears the entered key and consent. Hosted compatible endpoints require public HTTPS; desktop compatible engines can use HTTP on localhost with an optional key. Syllabi and generated text are sent only after the explicit online consent and Generate action. Provider costs, quotas, and privacy policies apply.
 
 | Provider | Configuration |
 |---|---|
@@ -49,7 +57,7 @@ For the Windows app, install `requirements-desktop.txt` and run `desktop.py`. Tk
 
 ```powershell
 py -3.12 -m unittest discover -s tests -v
-py -3.12 -m compileall -q app.py desktop.py academy_theme.py course_core.py engines.py course_workflow.py tests tools
+py -3.12 -m compileall -q app.py desktop.py academy_theme.py course_core.py engines.py course_workflow.py hosted_keys.py tests tools
 py -3.12 desktop.py --smoke-test
 py -3.12 -m pip install -r requirements-build.txt
 py -3.12 -m PyInstaller --noconfirm --clean --windowed --onedir --name CourseFramework desktop.py

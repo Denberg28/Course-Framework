@@ -1,4 +1,6 @@
-# Course Framework 0.2.0-rc.1 — Direct course workflow
+# Course Framework 0.2.0-rc.2 — Direct course workflow
+
+Set `GEMINI_API_KEY = "YOUR_KEY"` in Streamlit’s Settings → Secrets to configure Gemini server-side. The API-key input is hidden when configured; credentials never appear in widgets, session state, saved projects, or exports. The server key is never sent to custom providers. All app users share its quota. Without Secrets, manual session-only keys remain available.
 
 Paste a syllabus, choose an agent model, and Generate in one workspace. Review modules with lesson content, activities, assessments, and video resources, then Use draft and Save/Export. Streamlit no longer has workflow tabs; Windows places the syllabus/agent controls beside the course. File/provider options are secondary.
 

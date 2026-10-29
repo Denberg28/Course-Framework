@@ -13,7 +13,7 @@ Based on [Denberg28/Agents_md AGENTS.md v1.1](https://github.com/Denberg28/Agent
 
 - Keep UI, generation adapters, and file/persistence logic separate. Never access Tk widgets from a worker thread.
 - Preserve accepted material when generation/revision fails. Stage generated output for explicit review before replacement.
-- API keys are session-only. Never commit, log, export, or put them in URLs. Use explicit project-field allow-lists and sanitized errors.
+- Manual/desktop API keys are session-only. The hosted Gemini key may be read from Streamlit Secrets, as explicitly requested by the user; keep it server-side and never prefill widgets or copy it into session/project state. Never commit, log, export, or put API keys in URLs. Use explicit project-field allow-lists and sanitized errors.
 - Treat syllabus files and provider responses as untrusted data. Bound file/text/response sizes, validate schemas, refuse credential-forwarding redirects, and use normal TLS verification.
 - Do not invent factual teaching material in local template mode. Identify placeholders and instructor-review requirements.
 

@@ -5,6 +5,7 @@ from academy_theme import streamlit_css
 from course_core import (CourseError, SAMPLE, VERSION, analyze_syllabus, export_bundle,
                          extract_text, load_project, make_project, project_bytes)
 from engines import EngineConfig, PROVIDERS
+from hosted_keys import gemini_secret
 from course_workflow import (CUSTOM_MODEL, GEMINI_MODELS, accept_job, advance, can_resume,
                       draft_text, is_complete, new_job)
 
@@ -33,7 +34,10 @@ def provider_changed():
 
 def config():
     model = state.custom_model.strip() if state.model_choice == CUSTOM_MODEL else state.model_choice
-    return EngineConfig(state.provider, state.get('api_key', ''), model, state.get('endpoint', 'https://api.openai.com/v1'))
+    key = state.get('api_key', '')
+    if state.provider == PROVIDERS[1]:
+        key = gemini_secret(st.secrets) or key
+    return EngineConfig(state.provider, key, model, state.get('endpoint', 'https://api.openai.com/v1'))
 
 
 def project():
@@ -146,7 +150,15 @@ with left:
     if state.model_choice not in options:
         state.model_choice = options[0]
     agent.selectbox('Agent model', options, key='model_choice', help='Presets are shortcuts; availability depends on your provider account.')
-    if state.provider != PROVIDERS[0]:
+    hosted_key = ''
+    if state.provider == PROVIDERS[1]:
+        try:
+            hosted_key = gemini_secret(st.secrets)
+        except CourseError as error:
+            st.error(str(error))
+    if hosted_key:
+        key.caption('Gemini key configured in Secrets')
+    elif state.provider != PROVIDERS[0]:
         key.text_input('API key', type='password', key='api_key')
     if state.model_choice == CUSTOM_MODEL:
         st.text_input('Model ID', key='custom_model', placeholder='Provider model ID')
@@ -155,7 +167,8 @@ with left:
         if state.provider == PROVIDERS[2]:
             st.text_input('API base URL', key='endpoint', on_change=lambda: state.update(online_consent=False))
         st.text_input('Title (optional)', key='course_title')
-        st.button('Clear key', on_click=lambda: state.update(api_key=''))
+        if not hosted_key:
+            st.button('Clear key', on_click=lambda: state.update(api_key=''))
         st.file_uploader('Import syllabus', type=['txt', 'md', 'docx', 'pdf'], key='syllabus_file')
         st.checkbox('Replace syllabus', key='replace_source')
         a, b = st.columns(2)
@@ -164,7 +177,7 @@ with left:
         st.file_uploader('Open project', type=['json'], key='project_file')
         st.checkbox('Replace project', key='replace_project')
         st.button('Open', on_click=open_project)
-        st.caption('Keys stay in this session. Save a project to keep your course and unfinished modules.')
+        st.caption('Credentials are excluded from projects. Save a project to keep your course and unfinished modules.')
     count = 0
     try:
         if state.source.strip():

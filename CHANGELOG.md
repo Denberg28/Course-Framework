@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.0-rc.1 — Direct syllabus workflow
+
+- One workspace in Windows and Streamlit: paste syllabus, choose an agent model, Generate, review, Use draft, Save/Export. Move import, provider configuration, and project opening into Settings/File controls.
+- Add Gemini model presets and custom model IDs; preserve Chat Completions compatible and offline providers. Provider changes clear the key and online consent.
+- Generate all modules or one selected module, one request per module, with required objectives, lesson content, activities, and assessment sections.
+- Keep completed modules after failures; Resume skips them with matching source/model/endpoint. Windows Pause finishes the active request before stopping.
+- Version-2 projects retain accepted edits and unfinished drafts without credentials. Version-1 projects migrate on load.
+- Add deterministic video searches and syllabus-supplied video links; no verified video-discovery claim.
+
+
 ## 0.1.0-rc.3 — Fit smaller Windows displays
 
 - Fit the initial window within the display with room for window chrome and the taskbar; retain the 940×620 minimum workspace.

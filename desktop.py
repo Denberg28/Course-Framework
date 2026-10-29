@@ -1,442 +1,443 @@
-"""Windows-first Tk course maker. Network work never touches the Tk thread."""
+"""Single-workspace Windows course authoring. Workers never access Tk widgets."""
 from __future__ import annotations
 
-import queue
 from pathlib import Path
+import queue
 import sys
 import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
 
+from academy_theme import FIELD, INK, LINE, PAPER, WARM, apply_desktop_theme
 from course_core import (CourseError, SAMPLE, VERSION, analyze_syllabus, atomic_write,
                          export_bundle, export_html, extract_text, load_project,
                          make_project, project_bytes, read_file)
-from engines import EngineConfig, PROVIDERS, generate_course
-from academy_theme import FIELD, INK, LINE, MUTED, PAPER, WARM, apply_desktop_theme
+from engines import EngineConfig, PROVIDERS
+from course_workflow import GEMINI_MODELS, accept_job, advance, can_resume, draft_text, is_complete, new_job
 
 
 class CourseMaker:
     def __init__(self, root):
-        self.root = root
-        self.path = None
-        self.dirty = False
-        self.loading = False
-        self.engine_used = "Local template"
-        self.candidate_engine = "Local template"
-        self.candidate_source = ""
-        self.candidate_title = ""
-        self.unaccepted = False
-        self.busy = False
-        self.discard_result = False
+        self.root, self.path = root, None
+        self.dirty = self.loading = self.busy = False
+        self.job = None
+        self.engine_used, self.model_used, self.accepted_source = 'Local template', '', ''
         self.results = queue.Queue(maxsize=1)
-        root.title(f"Course Framework {VERSION}")
-        width = min(1160, max(940, root.winfo_screenwidth() - 40))
-        height = min(790, max(620, root.winfo_screenheight() - 100))
-        root.geometry(f"{width}x{height}+20+20")
-        root.minsize(940, 620)
+        self.pause_event = threading.Event()
+        self.review_timer = None
+        self.poll_timer = None
+        self.plan = None
         self.style = apply_desktop_theme(root)
-        header = ttk.Frame(root, padding=(18, 12))
-        header.pack(fill="x")
-        ttk.Label(header, text="Course Framework", style="Title.TLabel").pack(side="left")
-        toolbar = ttk.Frame(header)
-        toolbar.pack(side="right")
-        for label, action in (("New", self.new), ("Open", self.open_project),
-                              ("Save", self.save), ("Save as…", lambda: self.save(True)),
-                              ("Export…", self.export)):
-            ttk.Button(toolbar, text=label, command=action).pack(side="left", padx=(4, 0))
-        ttk.Separator(root).pack(fill="x")
-        shell = ttk.Frame(root)
-        shell.pack(fill="both", expand=True)
-        rail = ttk.Frame(shell, style="Rail.TFrame", padding=(12, 18), width=196)
-        rail.pack(side="left", fill="y")
-        rail.pack_propagate(False)
-        ttk.Label(rail, text="COURSE MAKER", style="Brand.TLabel").pack(anchor="w", padx=12)
-        ttk.Label(rail, text="Authoring workspace", style="Rail.TLabel").pack(anchor="w", padx=12, pady=(3, 18))
-        ttk.Separator(shell, orient="vertical").pack(side="left", fill="y")
-        workspace = ttk.Frame(shell, padding=(18, 14))
-        workspace.pack(side="left", fill="both", expand=True)
-        title_row = ttk.Frame(workspace)
-        title_row.pack(fill="x", pady=(0, 14))
-        ttk.Label(title_row, text="Course title", style="Muted.TLabel").pack(side="left", padx=(0, 12))
+        root.title(f'Course Framework {VERSION}')
+        root.geometry(f'{min(1160, max(940, root.winfo_screenwidth() - 40))}x{min(790, max(620, root.winfo_screenheight() - 100))}+20+20')
+        root.minsize(940, 620)
         self.title = tk.StringVar()
-        ttk.Entry(title_row, textvariable=self.title).pack(side="left", fill="x", expand=True)
-        self.title.trace_add("write", lambda *_: self.mark_dirty())
-        self.tabs = ttk.Notebook(workspace, style="Workspace.TNotebook")
-        self.tabs.pack(fill="both", expand=True)
-        self.source_tab = ttk.Frame(self.tabs)
-        self.editor_tab = ttk.Frame(self.tabs)
-        self.draft_tab = ttk.Frame(self.tabs)
-        self.settings_tab = ttk.Frame(self.tabs)
-        self.navigation = tk.StringVar(value="0")
-        self.nav_buttons = []
-        for index, (label, tab) in enumerate((("1   Syllabus", self.source_tab),
-                                             ("2   Review draft", self.draft_tab),
-                                             ("3   Course editor", self.editor_tab),
-                                             ("Engine settings", self.settings_tab))):
-            self.tabs.add(tab, text=label)
-            button = ttk.Radiobutton(rail, text=label, variable=self.navigation, value=str(index),
-                                     style="Nav.TRadiobutton", command=lambda page=tab: self.tabs.select(page))
-            button.pack(fill="x", pady=(0, 4))
-            self.nav_buttons.append(button)
-            root.bind(f"<Alt-Key-{index + 1}>", lambda event, page=tab: self.tabs.select(page))
-        self.tabs.bind("<<NotebookTabChanged>>", self.sync_navigation)
-        ttk.Label(rail, text=f"{VERSION}\nSyllabus → draft → course", style="Rail.TLabel",
-                  justify="left").pack(side="bottom", anchor="w", padx=12)
-        bar = ttk.Frame(self.source_tab)
-        bar.pack(fill="x", pady=(0, 10))
-        ttk.Button(bar, text="Import syllabus…", command=self.import_syllabus).pack(side="left", padx=(0, 6))
-        ttk.Button(bar, text="Load example", command=self.example).pack(side="left")
-        ttk.Button(bar, text="Review outline", command=self.review).pack(side="right")
-        panes = ttk.Panedwindow(self.source_tab, orient="horizontal")
-        panes.pack(fill="both", expand=True)
-        left, right = ttk.Frame(panes, padding=(0, 0, 10, 0)), ttk.Frame(panes, padding=(10, 0, 0, 0))
-        panes.add(left, weight=3)
-        panes.add(right, weight=2)
-        ttk.Label(left, text="Syllabus", style="Section.TLabel").pack(anchor="w", pady=(0, 6))
-        self.wrapped_label(left, "Paste text or import TXT, MD, DOCX, or a text-based PDF.")
-        self.source = self.textbox(left)
-        ttk.Label(right, text="Detected outline", style="Section.TLabel").pack(anchor="w", pady=(0, 6))
-        self.wrapped_label(right, "Review topics and weeks before generating.")
-        self.outline = self.textbox(right, editable=False)
-        ttk.Label(self.editor_tab, text="Course editor", style="Section.TLabel").pack(anchor="w", pady=(0, 6))
-        self.wrapped_label(self.editor_tab, "Edit your accepted course in Markdown. Save to retain the syllabus and course.")
-        self.editor = self.textbox(self.editor_tab)
-        revision = ttk.Frame(self.editor_tab)
-        revision.pack(fill="x", pady=(10, 0))
-        self.instructions = tk.StringVar()
-        ttk.Entry(revision, textvariable=self.instructions).pack(side="left", fill="x", expand=True, padx=(0, 8))
-        self.revise_button = ttk.Button(revision, text="Revise with engine", command=lambda: self.start(True))
-        self.revise_button.pack(side="right")
-        self.wrapped_label(self.editor_tab, "Revision instructions, e.g. Add a worked example to module 2 and preserve the other modules.")
-        draft_bar = ttk.Frame(self.draft_tab)
-        draft_bar.pack(fill="x", pady=(0, 10))
-        ttk.Label(draft_bar, text="Review draft", style="Section.TLabel").pack(side="left")
-        self.apply_button = ttk.Button(draft_bar, text="Use this draft", style="Accent.TButton", command=self.apply_draft, state="disabled")
-        self.apply_button.pack(side="right")
-        self.wrapped_label(self.draft_tab, "Review before accepting. Use this draft replaces the accepted course after confirmation.")
-        self.candidate = self.textbox(self.draft_tab)
-        self.setup_engine()
-        ttk.Separator(root).pack(fill="x")
-        footer = ttk.Frame(root, padding=(18, 10))
-        footer.pack(fill="x")
-        self.status = tk.StringVar(value="Ready · Local template mode · No API key required")
-        status_label = ttk.Label(footer, textvariable=self.status, style="Muted.TLabel")
-        status_label.pack(side="left", fill="x", expand=True, padx=(0, 12))
-        status_label.bind("<Configure>", lambda event: status_label.configure(wraplength=max(140, event.width)))
-        self.cancel_button = ttk.Button(footer, text="Discard pending result", command=self.cancel, state="disabled")
-        self.cancel_button.pack(side="right", padx=(6, 0))
-        self.generate_button = ttk.Button(footer, text="Generate course", style="Accent.TButton", command=self.start)
-        self.generate_button.pack(side="right")
-        root.bind("<Control-s>", lambda e: self.save())
-        root.bind("<Control-o>", lambda e: self.open_project())
-        root.protocol("WM_DELETE_WINDOW", self.close)
-        root.after(150, self.poll)
+        self.provider = tk.StringVar(value=PROVIDERS[1])
+        self.model = tk.StringVar(value=GEMINI_MODELS[0])
+        self.key = tk.StringVar()
+        self.endpoint = tk.StringVar(value='https://api.openai.com/v1')
+        self.consent = tk.BooleanVar(value=False)
+        self.scope = tk.StringVar(value='All modules')
+        self.view = tk.StringVar(value='Course')
+        self.summary = tk.StringVar(value='Paste a syllabus to begin.')
+        self.status = tk.StringVar(value='Ready')
+        self.settings = None
+        self.title.trace_add('write', lambda *_: self.mark_dirty())
 
-    def sync_navigation(self, event=None):
-        self.navigation.set(str(self.tabs.index(self.tabs.select())))
+        header = ttk.Frame(root, padding=(18, 12))
+        header.pack(fill='x')
+        ttk.Label(header, text='Course Framework', style='Title.TLabel').pack(side='left')
+        ttk.Button(header, text='Save', command=self.save).pack(side='right')
+        menu_button = ttk.Menubutton(header, text='File')
+        menu_button.pack(side='right', padx=6)
+        menu = tk.Menu(menu_button, tearoff=False)
+        for label, command in [('New', self.new), ('Open…', self.open_project),
+                               ('Save as…', lambda: self.save(True)), ('Export…', self.export)]:
+            menu.add_command(label=label, command=command)
+        menu_button.configure(menu=menu)
+        ttk.Separator(root).pack(fill='x')
+        shell = ttk.Frame(root, padding=(18, 14))
+        shell.pack(fill='both', expand=True)
+        panes = ttk.Panedwindow(shell, orient='horizontal')
+        panes.pack(fill='both', expand=True)
+        self.input_panel = ttk.Frame(panes, padding=(0, 0, 12, 0))
+        self.output_panel = ttk.Frame(panes, padding=(12, 0, 0, 0))
+        panes.add(self.input_panel, weight=2)
+        panes.add(self.output_panel, weight=3)
+        self.input_panel.columnconfigure(0, weight=1)
+
+        bar = ttk.Frame(self.input_panel)
+        bar.pack(fill='x', pady=(0, 6))
+        ttk.Label(bar, text='Syllabus', style='Section.TLabel').pack(side='left')
+        ttk.Button(bar, text='Import…', command=self.import_syllabus).pack(side='right')
+        self.source = self.textbox(self.input_panel)
+        self.source.configure(height=1)
+        details = ttk.Frame(self.input_panel)
+        details.pack(fill='x', pady=(6, 8))
+        label = ttk.Label(details, textvariable=self.summary, style='Muted.TLabel')
+        label.pack(side='left', fill='x', expand=True)
+        label.bind('<Configure>', lambda e: label.configure(wraplength=max(80, e.width)))
+        ttk.Button(details, text='Outline', command=self.show_outline).pack(side='right')
+        ttk.Label(self.input_panel, text='Agent model', style='Muted.TLabel').pack(anchor='w')
+        self.model_picker = ttk.Combobox(self.input_panel, textvariable=self.model, values=GEMINI_MODELS)
+        self.model_picker.pack(fill='x', pady=(3, 8))
+        ttk.Label(self.input_panel, text='API key', style='Muted.TLabel').pack(anchor='w')
+        self.key_entry = ttk.Entry(self.input_panel, textvariable=self.key, show='•')
+        self.key_entry.pack(fill='x', pady=(3, 5))
+        ttk.Button(self.input_panel, text='Settings…', command=self.toggle_settings).pack(anchor='w', pady=(0, 3))
+        self.scope_picker = ttk.Combobox(self.input_panel, textvariable=self.scope, state='readonly', values=['All modules'])
+        self.scope_picker.pack(fill='x', pady=(6, 4))
+        ttk.Checkbutton(self.input_panel, text='Send syllabus to agent · fees/quota may apply', variable=self.consent).pack(anchor='w', pady=(0, 5))
+        actions = ttk.Frame(self.input_panel)
+        actions.pack(fill='x')
+        self.generate_button = ttk.Button(actions, text='Generate', style='Accent.TButton', command=self.start)
+        self.generate_button.pack(side='left', fill='x', expand=True)
+        self.pause_button = ttk.Button(actions, text='Pause', state='disabled', command=self.pause)
+        self.pause_button.pack(side='right', padx=(6, 0))
+
+        result_bar = ttk.Frame(self.output_panel)
+        result_bar.pack(fill='x', pady=(0, 8))
+        ttk.Label(result_bar, text='Course', style='Section.TLabel').pack(side='left')
+        self.apply_button = ttk.Button(result_bar, text='Use draft', style='Accent.TButton', command=self.apply_draft, state='disabled')
+        self.apply_button.pack(side='right')
+        views = ttk.Frame(self.output_panel)
+        views.pack(fill='x', pady=(0, 6))
+        self.draft_radio = ttk.Radiobutton(views, text='Draft', value='Draft', variable=self.view, command=self.show_view, state='disabled')
+        self.draft_radio.pack(side='left')
+        ttk.Radiobutton(views, text='Accepted course', value='Course', variable=self.view, command=self.show_view).pack(side='left', padx=8)
+        self.result_host = ttk.Frame(self.output_panel)
+        self.result_host.pack(fill='both', expand=True)
+        self.editor_frame, self.candidate_frame = ttk.Frame(self.result_host), ttk.Frame(self.result_host)
+        self.editor = self.textbox(self.editor_frame)
+        self.candidate = self.textbox(self.candidate_frame, editable=False)
+        self.editor_frame.pack(fill='both', expand=True)
+        foot = ttk.Frame(root, padding=(18, 9))
+        foot.pack(fill='x')
+        status_label = ttk.Label(foot, textvariable=self.status, style='Muted.TLabel')
+        status_label.pack(fill='x')
+        status_label.bind('<Configure>', lambda e: status_label.configure(wraplength=max(140, e.width)))
+        root.bind('<Control-s>', lambda e: self.save())
+        root.bind('<Control-o>', lambda e: self.open_project())
+        root.protocol('WM_DELETE_WINDOW', self.close)
+        self.poll_timer = root.after(120, self.poll)
 
     @staticmethod
-    def wrapped_label(parent, text):
-        label = ttk.Label(parent, text=text, style="Muted.TLabel", justify="left", wraplength=300)
-        label.pack(fill="x", pady=(0, 8))
-        label.bind("<Configure>", lambda event: label.configure(wraplength=max(100, event.width)))
-        return label
+    def text(box):
+        return box.get('1.0', 'end-1c')
+
+    @staticmethod
+    def replace(box, text):
+        state = box.cget('state')
+        box.configure(state='normal')
+        box.delete('1.0', 'end')
+        box.insert('1.0', text)
+        box.edit_modified(False)
+        box.configure(state=state)
 
     def textbox(self, parent, editable=True):
-        box = ScrolledText(parent, wrap="word", undo=True, font=("Segoe UI", 10), width=1, height=1,
-                           background=PAPER if editable else FIELD, foreground=INK,
-                           insertbackground=INK, selectbackground=WARM, selectforeground=INK,
-                           relief="flat", borderwidth=0, highlightthickness=1,
-                           highlightbackground=LINE, highlightcolor=INK, padx=12, pady=10)
-        box.pack(fill="both", expand=True)
+        box = ScrolledText(parent, wrap='word', undo=True, font=('Segoe UI', 10), width=1, height=1,
+                           background=PAPER if editable else FIELD, foreground=INK, insertbackground=INK,
+                           selectbackground=WARM, selectforeground=INK, relief='flat', borderwidth=0,
+                           highlightthickness=1, highlightbackground=LINE, highlightcolor=INK, padx=10, pady=8)
+        box.pack(fill='both', expand=True)
         if editable:
-            box.bind("<<Modified>>", lambda e: self.changed(box))
+            box.bind('<<Modified>>', lambda e: self.changed(box))
         else:
-            box.configure(state="disabled")
+            box.configure(state='disabled')
         return box
 
     def changed(self, box):
-        if box.edit_modified():
-            if box in (self.source, self.editor):
-                self.mark_dirty()
-            box.edit_modified(False)
+        if not box.edit_modified():
+            return
+        box.edit_modified(False)
+        self.mark_dirty()
+        if box is self.source:
+            if self.review_timer:
+                self.root.after_cancel(self.review_timer)
+            self.review_timer = self.root.after(300, self.review)
 
     def mark_dirty(self):
         if not self.loading:
             self.dirty = True
-            self.root.title(f"* Course Framework {VERSION}" + (f" — {self.path.name}" if self.path else ""))
+            self.root.title(f'* Course Framework {VERSION}')
 
-    @staticmethod
-    def text(box):
-        return box.get("1.0", "end-1c")
-
-    @staticmethod
-    def replace(box, value):
-        state = box.cget("state")
-        box.configure(state="normal")
-        box.delete("1.0", "end")
-        box.insert("1.0", value)
-        box.edit_modified(False)
-        box.configure(state=state)
-
-    def setup_engine(self):
-        heading = ttk.Label(self.settings_tab, text="Engine settings", style="Section.TLabel")
-        heading.pack(anchor="w", pady=(0, 6))
-        self.wrapped_label(self.settings_tab, "Choose the engine used to generate and revise course drafts.")
-        form = ttk.Frame(self.settings_tab)
-        form.pack(fill="x")
+    def toggle_settings(self):
+        if self.settings is not None and self.settings.winfo_exists():
+            self.settings.lift()
+            return
+        self.settings = tk.Toplevel(self.root)
+        self.settings.title('Settings')
+        self.settings.transient(self.root)
+        self.settings.geometry('460x245')
+        form = ttk.Frame(self.settings, padding=16)
+        form.pack(fill='both', expand=True)
         form.columnconfigure(1, weight=1)
-        self.provider = tk.StringVar(value=PROVIDERS[0])
-        self.model = tk.StringVar(value="gemini-2.5-flash-lite")
-        self.endpoint = tk.StringVar(value="https://api.openai.com/v1")
-        self.key = tk.StringVar()
-        fields = [("Provider", ttk.Combobox(form, values=PROVIDERS, textvariable=self.provider, state="readonly")),
-                  ("API key", ttk.Entry(form, textvariable=self.key, show="•")),
-                  ("Model ID", ttk.Entry(form, textvariable=self.model)),
-                  ("API base URL", ttk.Entry(form, textvariable=self.endpoint))]
-        for row, (label, widget) in enumerate(fields):
-            ttk.Label(form, text=label).grid(row=row, column=0, sticky="w", padx=(0, 20), pady=6)
-            widget.grid(row=row, column=1, sticky="ew", pady=6)
-        ttk.Button(form, text="Clear key", command=lambda: self.key.set("")).grid(row=4, column=1, sticky="w", pady=8)
-        ttk.Button(form, text="Provider guide…", command=self.provider_guide).grid(row=4, column=1, sticky="e", pady=8)
-        self.wrapped_label(self.settings_tab,
-            "Keys stay in this session and are excluded from saved projects. Online generation sends your syllabus "
-            "and, for revisions, your course to the selected provider. Charges and quotas may apply.")
-        self.wrapped_label(self.settings_tab, "Review generated facts, answers, coverage, and references before use.")
+        for row, (label, widget) in enumerate([
+            ('Provider', ttk.Combobox(form, textvariable=self.provider, values=PROVIDERS, state='readonly')),
+            ('Compatible URL', ttk.Entry(form, textvariable=self.endpoint)),
+            ('Title', ttk.Entry(form, textvariable=self.title))]):
+            ttk.Label(form, text=label, style='Muted.TLabel').grid(row=row, column=0, sticky='w', padx=(0, 10))
+            widget.grid(row=row, column=1, sticky='ew', pady=5)
+            if row == 0:
+                widget.bind('<<ComboboxSelected>>', self.provider_changed)
+        ttk.Button(form, text='Clear key', command=lambda: self.key.set('')).grid(row=3, column=0, sticky='w', pady=10)
+        ttk.Button(form, text='Done', command=self.settings.destroy).grid(row=3, column=1, sticky='e', pady=10)
 
-    def provider_guide(self):
-        messagebox.showinfo("Provider guide",
-            "Google AI Studio: enter a Gemini key and available model ID. The Google endpoint is fixed.\n\n"
-            "OpenAI-compatible: enter a key, model ID, and Chat Completions base URL. "
-            "A key alone cannot identify a provider or support every API format.\n\n"
-            "For a local server, use its localhost URL; a key may be omitted.", parent=self.root)
+    def provider_changed(self, event=None):
+        self.key.set('')
+        self.consent.set(False)
+        if self.provider.get() == PROVIDERS[1]:
+            self.model_picker.configure(values=GEMINI_MODELS)
+            self.model.set(GEMINI_MODELS[0])
+        elif self.provider.get() == PROVIDERS[0]:
+            self.model_picker.configure(values=['Offline template'])
+            self.model.set('Offline template')
+        else:
+            self.model_picker.configure(values=[])
+            self.model.set('')
+
+    def show_view(self):
+        self.editor_frame.pack_forget()
+        self.candidate_frame.pack_forget()
+        (self.candidate_frame if self.view.get() == 'Draft' else self.editor_frame).pack(fill='both', expand=True)
+
+    def review(self):
+        self.review_timer = None
+        try:
+            self.plan = analyze_syllabus(self.text(self.source))
+            choices = ['All modules'] + [f"{i + 1}. {t['title']}" for i, t in enumerate(self.plan['topics'])]
+            self.scope_picker.configure(values=choices)
+            if self.scope.get() not in choices:
+                self.scope.set(choices[0])
+            self.summary.set(f"{len(self.plan['topics'])} modules · {len(self.plan['outcomes'])} outcomes")
+        except CourseError:
+            self.plan = None
+            self.summary.set('Paste a syllabus to begin.')
+            self.scope.set('All modules')
+            self.scope_picker.configure(values=['All modules'])
+
+    def show_outline(self):
+        self.review()
+        if self.plan:
+            lines = [f"{i + 1}. {t['title']} · {t['schedule'] or 'Week unassigned'}" for i, t in enumerate(self.plan['topics'])]
+            lines += ['', *self.plan['warnings']]
+            messagebox.showinfo('Outline', '\n'.join(lines), parent=self.root)
+
+    def config(self):
+        return EngineConfig(self.provider.get(), self.key.get(), self.model.get().strip(), self.endpoint.get().strip(), True)
+
+    def indices(self):
+        if self.scope.get() == 'All modules':
+            return None
+        return [int(self.scope.get().split('.', 1)[0]) - 1]
 
     def project(self):
-        return make_project(self.text(self.source), self.title.get(), self.text(self.editor), self.engine_used)
+        title = self.title.get().strip()
+        if not title and self.text(self.source).strip():
+            title = analyze_syllabus(self.text(self.source))['metadata'].get('title', '')
+        return make_project(self.text(self.source), title, self.text(self.editor), self.engine_used,
+                            model=self.model_used, pending=self.job, accepted_syllabus=self.accepted_source or self.text(self.source))
 
-    def confirm_leave(self):
-        if self.unaccepted and not messagebox.askyesno("Unaccepted draft", "The generated draft has not been accepted or saved. Discard it and continue?", parent=self.root):
-            return False
-        if not self.dirty:
-            return True
-        answer = messagebox.askyesnocancel("Unsaved course", "Save your current project before continuing?", parent=self.root)
-        return self.save() if answer else answer is False
+    def refresh_draft(self):
+        self.replace(self.candidate, draft_text(self.job) if self.job else '')
+        self.apply_button.configure(state='normal' if is_complete(self.job) else 'disabled')
+        self.draft_radio.configure(state='normal' if self.job else 'disabled')
+        if self.job:
+            self.view.set('Draft')
+        self.show_view()
 
     def set_project(self, project, path=None):
         self.loading = True
-        self.title.set(project["title"])
-        self.replace(self.source, project["syllabus"])
-        self.replace(self.editor, project["content"])
-        self.replace(self.candidate, "")
-        self.apply_button.configure(state="disabled")
-        self.unaccepted = False
-        self.engine_used = project["engine"]
+        self.replace(self.source, project['syllabus'])
+        self.title.set(project['title'])
+        self.replace(self.editor, project['content'])
+        self.engine_used, self.model_used, self.job = project['engine'], project.get('model', ''), project.get('pending')
+        self.accepted_source = project.get('accepted_syllabus', project['syllabus'])
         self.path, self.dirty = path, False
-        self.loading = False
-        self.root.title(f"Course Framework {VERSION}" + (f" — {path.name}" if path else ""))
+        if self.job and self.job['provider'] in PROVIDERS:
+            self.provider.set(self.job['provider'])
+            self.provider_changed()
+            self.model.set(self.job['model'] or 'Offline template')
+        self.view.set('Draft' if self.job else 'Course')
+        self.refresh_draft()
         self.review()
+        self.loading = False
+        self.root.title(f'Course Framework {VERSION}')
+
+    def confirm_leave(self):
+        if not self.dirty:
+            return True
+        answer = messagebox.askyesnocancel('Save project', 'Save your course and unfinished draft before continuing?', parent=self.root)
+        return self.save() if answer else answer is False
 
     def new(self):
         if self.busy:
-            return messagebox.showinfo("Engine busy", "Wait for the pending request before opening another project.")
+            return self.status.set('Pause and wait for the active request before opening another project.')
         if self.confirm_leave():
-            project = make_project("", "", "")
-            project["title"] = ""
+            project = make_project('', '', '')
+            project['title'] = ''
             self.set_project(project)
-            self.status.set("New project")
-            self.tabs.select(self.source_tab)
 
     def open_project(self):
-        if self.busy:
-            return messagebox.showinfo("Engine busy", "Wait for the pending request before opening another project.")
-        if not self.confirm_leave():
+        if self.busy or not self.confirm_leave():
             return
-        path = filedialog.askopenfilename(filetypes=[("Course project", "*.json")])
+        path = filedialog.askopenfilename(filetypes=[('Course project', '*.json')], parent=self.root)
         if path:
             try:
-                project = load_project(read_file(path))
-                self.set_project(project, Path(path))
-                self.status.set("Project opened")
-                self.tabs.select(self.editor_tab if project["content"] else self.source_tab)
+                self.set_project(load_project(read_file(path)), Path(path))
+                self.status.set('Project opened · enter your session key to resume a draft')
             except (CourseError, OSError) as error:
                 self.error(error)
 
     def save(self, save_as=False):
         path = self.path if self.path and not save_as else filedialog.asksaveasfilename(
-            defaultextension=".json", initialfile="course-project.json", filetypes=[("Course project", "*.json")])
+            defaultextension='.json', initialfile='course-project.json', filetypes=[('Course project', '*.json')], parent=self.root)
         if not path:
             return False
         try:
             atomic_write(path, project_bytes(self.project()))
             self.path, self.dirty = Path(path), False
-            self.root.title(f"Course Framework {VERSION} — {self.path.name}")
-            self.status.set("Project saved · API keys are excluded")
+            self.root.title(f'Course Framework {VERSION} — {self.path.name}')
+            self.status.set('Project saved · includes unfinished modules · no API key')
             return True
         except (CourseError, OSError) as error:
             self.error(error)
             return False
 
     def import_syllabus(self):
-        path = filedialog.askopenfilename(filetypes=[("Syllabus", "*.txt *.md *.docx *.pdf")])
+        path = filedialog.askopenfilename(filetypes=[('Syllabus', '*.txt *.md *.docx *.pdf')], parent=self.root)
         if path:
             try:
-                text = extract_text(path, read_file(path))
-                self.set_source(text)
+                self.set_source(extract_text(path, read_file(path)))
             except (CourseError, OSError) as error:
                 self.error(error)
 
     def set_source(self, text):
-        if self.text(self.source).strip() and not messagebox.askyesno("Replace syllabus", "Replace the current syllabus text? The course editor will be preserved."):
+        if self.text(self.source).strip() and not messagebox.askyesno('Replace syllabus', 'Replace the current syllabus?', parent=self.root):
             return
         self.replace(self.source, text)
+        self.title.set('')
         self.mark_dirty()
         self.review()
 
-    def example(self):
-        self.set_source(SAMPLE)
-
-    def review(self):
-        source = self.text(self.source)
-        if not source.strip():
-            self.replace(self.outline, "Paste a syllabus or load the example, then review its outline.")
-            return
-        try:
-            plan = analyze_syllabus(source)
-            if not self.title.get().strip() and plan["metadata"].get("title"):
-                self.title.set(plan["metadata"]["title"])
-            lines = [f"{len(plan['topics'])} modules · {len(plan['outcomes'])} course outcomes", ""]
-            lines += [f"{key.title()}: {value}" for key, value in plan["metadata"].items()]
-            lines += ["", "COURSE OUTCOMES"] + plan["outcomes"]
-            lines += ["", "MODULES"]
-            for i, topic in enumerate(plan["topics"], 1):
-                lines += [f"{i}. {topic['title']} — Week(s): {topic['schedule'] or 'unassigned'}"]
-                lines += [f"   • {sub}" for sub in topic["subtopics"]]
-            lines += ["", "REVIEW NOTES"] + plan["warnings"]
-            self.replace(self.outline, "\n".join(lines))
-        except CourseError as error:
-            self.error(error)
-
-    def start(self, revise=False):
+    def start(self):
         if self.busy:
             return
-        if self.unaccepted and not messagebox.askyesno("Unaccepted draft", "Replace the pending generated draft if this new request succeeds?"):
-            return
-        source, title = self.text(self.source), self.title.get()
-        draft = self.text(self.editor) if revise else ""
-        instructions = self.instructions.get() if revise else ""
         try:
-            analyze_syllabus(source)
-            self.project()  # Validate all editor bounds before starting a paid call.
-            if revise and (not draft.strip() or not instructions.strip()):
-                raise CourseError("Enter a course draft and revision instructions first.")
-            config = EngineConfig(self.provider.get(), self.key.get(), self.model.get().strip(), self.endpoint.get().strip(), True)
-            if config.provider != "Local template":
-                if not messagebox.askyesno("Send to engine", f"Send the syllabus{' and course draft' if revise else ''} to {config.provider}?\n\nModel: {config.model}\nEndpoint: {'Google Gemini API' if config.provider == PROVIDERS[1] else config.base_url}\n\nProvider charges and quotas may apply."):
-                    return
-            self.busy, self.discard_result = True, False
-            self.generate_button.configure(state="disabled")
-            self.revise_button.configure(state="disabled")
-            self.cancel_button.configure(state="normal")
-            self.status.set("Generating a review draft… Your existing course is preserved.")
+            self.review()
+            self.project()
+            cfg = self.config()
+            if cfg.provider != PROVIDERS[0] and not self.consent.get():
+                raise CourseError('Allow sending the syllabus to the selected agent first.')
+            source, title, indices = self.text(self.source), self.title.get(), self.indices()
+            job = self.job if can_resume(self.job, source, title, cfg, indices) else new_job(source, title, cfg, indices)
+            self.busy = True
+            self.pause_event.clear()
+            self.generate_button.configure(state='disabled')
+            self.pause_button.configure(state='normal')
+            self.status.set(f"Generating · {len(job['indices']) - len(job['completed'])} module request(s) remaining")
             def worker():
+                current = job
                 try:
-                    result = generate_course(source, title, config, draft=draft, instructions=instructions)
-                    self.results.put((True, result, config.provider, source, title))
+                    while not is_complete(current) and not self.pause_event.is_set():
+                        current = advance(current, cfg)
+                        self.results.put(('progress', current))
+                    self.results.put(('done', None))
                 except CourseError as error:
-                    self.results.put((False, str(error), config.provider, source, title))
+                    self.results.put(('error', str(error)))
                 except Exception:
-                    self.results.put((False, "Unexpected engine failure. Your current draft is unchanged.", config.provider, source, title))
+                    self.results.put(('error', 'Request stopped unexpectedly. Completed modules are preserved.'))
             threading.Thread(target=worker, daemon=True).start()
         except CourseError as error:
             self.error(error)
 
-    def cancel(self):
-        self.discard_result = True
-        self.cancel_button.configure(state="disabled")
-        self.status.set("Pending result will be discarded. Waiting for the request to finish; provider billing may still apply.")
+    def pause(self):
+        self.pause_event.set()
+        self.pause_button.configure(state='disabled')
+        self.status.set('Pausing after the active module. Its request may still be billed.')
 
     def poll(self):
         try:
-            success, value, provider, source, title = self.results.get_nowait()
-            self.busy = False
-            self.generate_button.configure(state="normal")
-            self.revise_button.configure(state="normal")
-            self.cancel_button.configure(state="disabled")
-            if self.discard_result:
-                self.status.set("Pending result discarded · Current course unchanged")
-            elif success:
-                self.replace(self.candidate, value)
-                self.candidate_engine = provider
-                self.candidate_source, self.candidate_title = source, title
-                self.unaccepted = True
-                self.apply_button.configure(state="normal")
-                self.tabs.select(self.draft_tab)
-                self.status.set("Draft ready · Review it, then select Use this draft")
+            kind, value = self.results.get_nowait()
+            if kind == 'progress':
+                self.job = value
+                self.refresh_draft()
+                self.mark_dirty()
+                self.status.set(f"Draft · {len(value['completed'])}/{len(value['indices'])} modules · {value['model'] or 'Offline template'}")
             else:
-                self.status.set("Generation failed · Current course unchanged")
-                self.error(CourseError(value))
+                self.busy = False
+                self.generate_button.configure(state='normal')
+                self.pause_button.configure(state='disabled')
+                self.status.set('Draft ready · Review and use draft' if is_complete(self.job) else 'Paused · Generate resumes completed work with the same syllabus and model')
+                if kind == 'error':
+                    self.error(CourseError(value))
         except queue.Empty:
             pass
-        self.root.after(150, self.poll)
+        self.poll_timer = self.root.after(120, self.poll)
 
     def apply_draft(self):
-        if self.text(self.editor).strip() and not messagebox.askyesno("Replace accepted course", "Replace the course editor with this draft? Save a project copy first if you need the previous version."):
-            return
-        if (self.text(self.source) != self.candidate_source or self.title.get() != self.candidate_title) and not messagebox.askyesno(
-                "Syllabus changed", "Restore the syllabus and title used to generate this draft? The current source has changed since generation."):
-            return
-        self.replace(self.source, self.candidate_source)
-        self.title.set(self.candidate_title)
-        self.replace(self.editor, self.text(self.candidate))
-        self.engine_used = self.candidate_engine
-        self.unaccepted = False
-        self.mark_dirty()
-        self.tabs.select(self.editor_tab)
-        self.status.set("Draft accepted · Edit and save your course project")
+        try:
+            if not is_complete(self.job):
+                raise CourseError('Finish the selected modules before using this draft.')
+            if self.text(self.editor).strip() and not messagebox.askyesno('Replace course', 'Replace the accepted course with this draft?', parent=self.root):
+                return
+            if (self.text(self.source) != self.job['syllabus'] or (self.title.get().strip() and self.title.get() != self.job['title'])) and not messagebox.askyesno(
+                    'Restore syllabus', 'Use the syllabus and title that generated this draft?', parent=self.root):
+                return
+            saved = accept_job(self.project(), self.job)
+            self.set_project(saved, self.path)
+            self.mark_dirty()
+            self.status.set('Course ready · edit and save')
+        except CourseError as error:
+            self.error(error)
 
     def export(self):
         try:
-            project = self.project()
-            if not project["content"].strip():
-                raise CourseError("Generate and accept a draft, or write course material in the editor first.")
-            path = filedialog.asksaveasfilename(defaultextension=".zip", initialfile="course-package.zip",
-                filetypes=[("Complete course package", "*.zip"), ("Markdown material", "*.md"), ("Printable HTML text view", "*.html")])
-            if not path:
-                return
-            suffix = Path(path).suffix.lower()
-            data = (project["content"].encode("utf-8") if suffix == ".md" else
-                    export_html(project["title"], project["content"]) if suffix == ".html" else export_bundle(project))
-            atomic_write(path, data)
-            self.status.set("Course exported · Save the project separately to keep editing later")
+            project = {**self.project(), 'pending': None}
+            if not project['content'].strip():
+                raise CourseError('Review and use a complete draft before exporting. Save project keeps unfinished work.')
+            path = filedialog.asksaveasfilename(defaultextension='.zip', initialfile='course-package.zip',
+                filetypes=[('Course package', '*.zip'), ('Markdown', '*.md'), ('HTML text view', '*.html')], parent=self.root)
+            if path:
+                suffix = Path(path).suffix.lower()
+                data = (project['content'].encode() if suffix == '.md' else export_html(project['title'], project['content'])
+                        if suffix == '.html' else export_bundle(project))
+                atomic_write(path, data)
+                self.status.set('Course exported')
         except (CourseError, OSError) as error:
             self.error(error)
 
     def error(self, error):
-        messagebox.showerror("Course Framework", str(error) if isinstance(error, CourseError) else "Could not read or save this file. Check its location and permissions.", parent=self.root)
+        text = str(error) if isinstance(error, CourseError) else 'Could not read or save this file. Check its location and permissions.'
+        self.status.set(text)
+        messagebox.showerror('Course Framework', text, parent=self.root)
 
     def close(self):
-        if self.busy and not messagebox.askyesno("Engine request pending", "Close the app and discard the pending result? Provider billing may still apply."):
+        if self.busy and not messagebox.askyesno('Request active', 'Close after saving completed work? The active provider request may still be billed.', parent=self.root):
             return
         if self.confirm_leave():
-            self.key.set("")
+            self.pause_event.set()
+            self.key.set('')
+            for timer in self.root.tk.call('after', 'info'):
+                self.root.after_cancel(timer)
             self.root.destroy()
 
 
 def main():
     root = tk.Tk()
     app = CourseMaker(root)
-    if "--smoke-test" in sys.argv:
+    if '--smoke-test' in sys.argv:
         from course_core import build_course_markdown
-        app.set_project(make_project(SAMPLE, "Smoke Test", build_course_markdown(SAMPLE)))
+        app.set_project(make_project(SAMPLE, 'Smoke Test', build_course_markdown(SAMPLE)))
         root.update()
-        assert "Module 1:" in app.text(app.editor)
-        assert "5 modules" in app.text(app.outline)
+        assert 'Module 1:' in app.text(app.editor)
+        assert '5 modules' in app.summary.get()
         assert not app.key.get()
         root.destroy()
         return
     root.mainloop()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

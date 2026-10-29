@@ -10,7 +10,7 @@ import re
 import tempfile
 import zipfile
 
-VERSION = "0.1.0-rc.3"
+VERSION = "0.2.0-rc.1"
 MAX_FILE_BYTES = 8 * 1024 * 1024
 MAX_TEXT = 180_000
 MAX_OUTPUT = 400_000
@@ -267,20 +267,52 @@ def build_course_markdown(syllabus: str, title: str = "") -> str:
     return "\n".join(lines)
 
 
-def make_project(syllabus: str, title: str, content: str, engine: str = "Local template") -> dict:
-    return validate_project({"schema_version": 1, "title": title or "Untitled Course", "syllabus": syllabus,
-                             "content": content, "engine": engine})
+def validate_pending(value):
+    """Allow-list a resumable draft, never provider credentials or endpoints."""
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise CourseError("Invalid draft checkpoint.")
+    source = bounded_text(value.get("syllabus"), "Draft syllabus")
+    plan = analyze_syllabus(source)
+    indices, completed = value.get("indices"), value.get("completed")
+    if (not isinstance(indices, list) or not indices or len(indices) > 80 or
+            any(type(i) is not int or i < 0 or i >= len(plan["topics"]) for i in indices) or
+            indices != sorted(set(indices))):
+        raise CourseError("Invalid draft module selection.")
+    if not isinstance(completed, list) or len(completed) > len(indices):
+        raise CourseError("Invalid completed modules.")
+    parts = [bounded_text(t, "Draft module", MAX_OUTPUT) for t in completed]
+    if any(not t.strip() for t in parts) or sum(map(len, parts)) > MAX_OUTPUT:
+        raise CourseError("Draft modules are empty or exceed the course limit.")
+    profile = value.get("profile")
+    if not isinstance(profile, str) or not re.fullmatch(r"[0-9a-f]{64}", profile):
+        raise CourseError("Invalid draft engine profile.")
+    return {"syllabus": source, "title": bounded_text(value.get("title"), "Draft title", 300),
+            "provider": bounded_text(value.get("provider"), "Draft provider", 200),
+            "model": bounded_text(value.get("model"), "Draft model", 200),
+            "profile": profile, "indices": list(indices), "completed": parts}
+
+
+def make_project(syllabus: str, title: str, content: str, engine: str = "Local template", *,
+                 model: str = "", pending=None, accepted_syllabus=None) -> dict:
+    return validate_project({"schema_version": 2, "title": title or "Untitled Course", "syllabus": syllabus,
+                             "content": content, "engine": engine, "model": model, "pending": pending,
+                             "accepted_syllabus": syllabus if accepted_syllabus is None else accepted_syllabus})
 
 
 def validate_project(value) -> dict:
-    if not isinstance(value, dict) or type(value.get("schema_version")) is not int or value["schema_version"] != 1:
-        raise CourseError("Unsupported project format. Open a Course Framework version 1 JSON project.")
-    # Explicit allow-list: keys, endpoints, or unexpected imported data never survive a save.
-    return {"schema_version": 1,
+    if (not isinstance(value, dict) or type(value.get("schema_version")) is not int or
+            value["schema_version"] not in {1, 2}):
+        raise CourseError("Unsupported project format. Open a Course Framework version 1 or 2 JSON project.")
+    return {"schema_version": 2,
             "title": bounded_text(value.get("title"), "Course title", 300),
             "syllabus": bounded_text(value.get("syllabus"), "Syllabus"),
             "content": bounded_text(value.get("content"), "Course material", MAX_OUTPUT),
-            "engine": bounded_text(value.get("engine", "Imported"), "Engine", 200)}
+            "engine": bounded_text(value.get("engine", "Imported"), "Engine", 200),
+            "model": bounded_text(value.get("model", ""), "Model", 200),
+            "accepted_syllabus": bounded_text(value.get("accepted_syllabus", value.get("syllabus")), "Accepted syllabus"),
+            "pending": validate_pending(value.get("pending")) if value["schema_version"] == 2 else None}
 
 
 def project_bytes(project: dict) -> bytes:
@@ -325,6 +357,7 @@ pre{{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit}}@media print{{bod
 
 def export_bundle(project: dict) -> bytes:
     project = validate_project(project)
+    project = validate_project({**project, "syllabus": project["accepted_syllabus"], "pending": None})
     target = io.BytesIO()
     with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("course.md", project["content"])

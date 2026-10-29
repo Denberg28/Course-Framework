@@ -1,180 +1,224 @@
-"""Optional Streamlit interface to the same Windows course authoring core."""
+"""One-page Streamlit authoring: paste, choose an agent, generate, review, save."""
 import streamlit as st
+
 from academy_theme import streamlit_css
+from course_core import (CourseError, SAMPLE, VERSION, analyze_syllabus, export_bundle,
+                         extract_text, load_project, make_project, project_bytes)
+from engines import EngineConfig, PROVIDERS
+from course_workflow import (CUSTOM_MODEL, GEMINI_MODELS, accept_job, advance, can_resume,
+                      draft_text, is_complete, new_job)
 
-from course_core import (CourseError, SAMPLE, VERSION, analyze_syllabus, build_course_markdown,
-                         export_bundle, extract_text, load_project, make_project, project_bytes)
-from engines import EngineConfig, PROVIDERS, generate_course
-
-st.set_page_config(page_title="Course Framework", page_icon="📘", layout="wide")
+st.set_page_config(page_title='Course Framework', page_icon='📘', layout='wide')
 st.markdown(streamlit_css(), unsafe_allow_html=True)
-for key, default in {"source": "", "course_title": "", "content": "", "engine_used": "Local template",
-                     "candidate": "", "candidate_source": "", "candidate_title": "",
-                     "candidate_engine": "Local template", "notice": "", "notice_error": False}.items():
+DEFAULTS = {'source': '', 'course_title': '', 'content': '', 'engine_used': 'Local template',
+            'model_used': '', 'accepted_source': '', 'pending': None, 'provider': PROVIDERS[1],
+            'api_key': '', 'model_choice': GEMINI_MODELS[0], 'custom_model': '',
+            'endpoint': 'https://api.openai.com/v1', 'notice': '', 'notice_error': False,
+            'online_consent': False, 'replace_course': False}
+for key, value in DEFAULTS.items():
     if key not in st.session_state:
-        st.session_state[key] = default
+        st.session_state[key] = value
+state = st.session_state
 
 
-def notice(text, error=False):
-    st.session_state.notice = text
-    st.session_state.notice_error = error
+def notify(text, error=False):
+    state.notice, state.notice_error = text, error
+
+
+def provider_changed():
+    state.api_key, state.online_consent = '', False
+    state.model_choice = (GEMINI_MODELS[0] if state.provider == PROVIDERS[1] else
+                          'Offline template' if state.provider == PROVIDERS[0] else CUSTOM_MODEL)
+
+
+def config():
+    model = state.custom_model.strip() if state.model_choice == CUSTOM_MODEL else state.model_choice
+    return EngineConfig(state.provider, state.get('api_key', ''), model, state.get('endpoint', 'https://api.openai.com/v1'))
+
+
+def project():
+    title = state.course_title.strip()
+    if not title and state.source.strip():
+        title = analyze_syllabus(state.source)['metadata'].get('title', '')
+    return make_project(state.source, title, state.content, state.engine_used,
+                        model=state.model_used, pending=state.pending, accepted_syllabus=state.accepted_source or state.source)
+
+
+def selected_indices():
+    return None if state.get('module_scope', -1) == -1 else [state.module_scope]
 
 
 def example():
-    st.session_state.source = SAMPLE
-    st.session_state.course_title = "Aircraft Structures"
-    notice("Example loaded. Review the outline before generating.")
+    if state.source.strip() and not state.get('replace_source', False):
+        return notify('Select Replace syllabus before loading over existing text.', True)
+    state.source, state.course_title = SAMPLE, ''
+    notify('Example loaded.')
 
 
 def import_source():
-    uploaded = st.session_state.syllabus_file
-    if uploaded is None:
-        return notice("Choose a syllabus file first.", True)
-    if st.session_state.source.strip() and not st.session_state.replace_source:
-        return notice("Select Replace syllabus text before importing over existing text.", True)
+    file = state.get('syllabus_file')
+    if file is None:
+        return notify('Choose a syllabus file.', True)
+    if state.source.strip() and not state.get('replace_source', False):
+        return notify('Select Replace syllabus first.', True)
     try:
-        st.session_state.source = extract_text(uploaded.name, uploaded.getvalue())
-        notice("Syllabus imported. Review the extracted text and outline.")
+        state.source = extract_text(file.name, file.getvalue())
+        state.course_title = ''
+        notify('Syllabus imported.')
     except CourseError as error:
-        notice(str(error), True)
+        notify(str(error), True)
 
 
 def open_project():
-    uploaded = st.session_state.project_file
-    if uploaded is None:
-        return notice("Choose a project file first.", True)
-    if (st.session_state.content or st.session_state.source) and not st.session_state.replace_project:
-        return notice("Download your project and select Replace current project before opening another.", True)
+    file = state.get('project_file')
+    if file is None:
+        return notify('Choose a project file.', True)
+    if (state.source or state.content or state.pending) and not state.get('replace_project', False):
+        return notify('Save your current project and select Replace project first.', True)
     try:
-        project = load_project(uploaded.getvalue())
-        st.session_state.update(source=project["syllabus"], course_title=project["title"], content=project["content"],
-                                engine_used=project["engine"], candidate="")
-        notice("Project opened.")
+        saved = load_project(file.getvalue())
+        state.update(source=saved['syllabus'], course_title=saved['title'], content=saved['content'],
+                     engine_used=saved['engine'], model_used=saved['model'], accepted_source=saved['accepted_syllabus'], pending=saved['pending'],
+                     replace_course=False)
+        if saved['pending']:
+            job = saved['pending']
+            if job['provider'] in PROVIDERS:
+                if state.provider != job['provider']:
+                    state.api_key, state.online_consent = '', False
+                state.provider = job['provider']
+                state.model_choice = (job['model'] if job['model'] in GEMINI_MODELS else
+                                      'Offline template' if state.provider == PROVIDERS[0] else CUSTOM_MODEL)
+                state.custom_model = job['model']
+        notify('Project opened. Set the original agent/endpoint and session key to resume.')
     except CourseError as error:
-        notice(str(error), True)
+        notify(str(error), True)
 
 
-def accept_draft():
-    if not st.session_state.candidate:
-        return
-    if (st.session_state.content or st.session_state.source != st.session_state.candidate_source) and not st.session_state.replace_draft:
-        return notice("Select Replace accepted course before accepting this generated draft.", True)
-    st.session_state.content = st.session_state.candidate
-    st.session_state.source = st.session_state.candidate_source
-    st.session_state.course_title = st.session_state.candidate_title
-    st.session_state.engine_used = st.session_state.candidate_engine
-    st.session_state.candidate = ""
-    notice("Draft accepted. Edit the course and download a project to keep your work.")
-
-
-def revise():
+def generate():
     try:
-        state = st.session_state
-        if not state.content.strip() or not state.revision_instructions.strip():
-            raise CourseError("Enter a course draft and revision instructions first.")
-        if state.provider != "Local template" and not state.online_consent:
-            raise CourseError("Select Send syllabus/draft to the selected engine before online revision.")
-        with st.spinner("Revising a copy of your course…"):
-            candidate = generate_course(state.source, state.course_title,
-                EngineConfig(state.provider, state.api_key, state.model, state.endpoint),
-                draft=state.content, instructions=state.revision_instructions)
-        state.update(candidate=candidate, candidate_source=state.source,
-                     candidate_title=state.course_title, candidate_engine=state.provider)
-        notice("Revision ready. Review the generated draft before accepting it.")
+        cfg = config()
+        if cfg.provider != PROVIDERS[0] and not state.online_consent:
+            raise CourseError('Allow sending the syllabus to the selected agent first.')
+        project()  # Validate all saved/editor fields before any provider call.
+        indices = selected_indices()
+        resume = can_resume(state.pending, state.source, state.course_title, cfg, indices)
+        job = state.pending if resume else new_job(state.source, state.course_title, cfg, indices)
+        bar = st.progress(len(job['completed']) / len(job['indices']), text='Generating modules…')
+        while not is_complete(job):
+            number = job['indices'][len(job['completed'])] + 1
+            bar.progress(len(job['completed']) / len(job['indices']), text=f'Generating module {number}…')
+            job = advance(job, cfg)
+            state.pending = job  # Commit each successful module before requesting the next.
+            state.replace_course = False
+        bar.progress(1.0, text='Draft ready')
+        notify('Draft ready. Review it and select Use draft.')
     except CourseError as error:
-        notice(str(error), True)
+        notify(str(error), True)
+    except Exception:
+        notify('The request stopped unexpectedly. Completed modules and your accepted course are preserved.', True)
 
 
-st.title("Course Framework")
-st.caption(f"Syllabus → course draft → instructor review · {VERSION}")
-st.caption("Session workspace · Save a project to retain it after browser reloads or server restarts.")
-if st.session_state.notice:
-    (st.error if st.session_state.notice_error else st.success)(st.session_state.notice)
-
-with st.sidebar:
-    st.subheader("Engine")
-    provider = st.selectbox("Provider", PROVIDERS, key="provider")
-    api_key = st.text_input("API key", type="password", key="api_key")
-    model = st.text_input("Model ID", value="gemini-2.5-flash-lite", key="model")
-    endpoint = st.text_input("API base URL (OpenAI-compatible)", value="https://api.openai.com/v1", key="endpoint")
-    st.button("Clear API key", on_click=lambda: st.session_state.update(api_key=""))
-    online_consent = st.checkbox("Send syllabus/draft to the selected engine", key="online_consent")
-    st.caption("Keys stay in this session and are excluded from project exports. Provider fees/quotas may apply. A compatible provider, endpoint, and model are required.")
-    st.divider()
-    st.subheader("Open a project")
-    st.file_uploader("Course project JSON", type=["json"], key="project_file")
-    st.checkbox("Replace current project", key="replace_project")
-    st.button("Open project", on_click=open_project)
-    st.caption("The Windows edition also supports local OpenAI-compatible servers. This hosted interface accepts public HTTPS endpoints only.")
-
-source_tab, course_tab, preview_tab = st.tabs(["1 · Syllabus", "2 · Course editor", "3 · Preview & export"])
-
-with source_tab:
-    left, right = st.columns([3, 2])
-    with left:
-        st.button("Load example", on_click=example)
-        with st.expander("Import syllabus"):
-            st.file_uploader("TXT, Markdown, DOCX, or text-based PDF · up to 8 MB", type=["txt", "md", "docx", "pdf"], key="syllabus_file")
-            st.checkbox("Replace syllabus text", key="replace_source")
-            st.button("Import text", on_click=import_source)
-        st.text_area("Syllabus", key="source", height=360, max_chars=180000,
-                     placeholder="Course Name: ...\nLearning Outcomes:\n1. ...\nTopics:\nWeek 1: ...")
-        st.text_input("Course title", key="course_title", max_chars=300)
-    with right:
-        st.subheader("Detected outline")
-        if st.session_state.source.strip():
-            try:
-                plan = analyze_syllabus(st.session_state.source)
-                st.caption(f"{len(plan['topics'])} modules · {len(plan['outcomes'])} course outcomes")
-                for warning in plan["warnings"]:
-                    st.warning(warning)
-                st.dataframe([{"Module": i, "Week(s)": t["schedule"] or "Unassigned", "Topic": t["title"]}
-                              for i, t in enumerate(plan["topics"], 1)], hide_index=True, width="stretch")
-                with st.expander("Outcomes and references"):
-                    st.write(plan["outcomes"])
-                    st.write(plan["references"])
-            except CourseError as error:
-                st.error(str(error))
-        else:
-            st.caption("Paste a syllabus or load the example. Edit the source to correct the detected structure.")
-    if st.button("Generate course", type="primary"):
-        try:
-            if provider != "Local template" and not online_consent:
-                raise CourseError("Select Send syllabus/draft to the selected engine before online generation.")
-            title = st.session_state.course_title.strip() or analyze_syllabus(st.session_state.source)["metadata"].get("title", "Untitled Course")
-            with st.spinner("Generating a review draft…"):
-                candidate = generate_course(st.session_state.source, title, EngineConfig(provider, api_key, model, endpoint))
-            st.session_state.update(candidate=candidate, candidate_source=st.session_state.source,
-                                    candidate_title=title, candidate_engine=provider)
-            st.success("Draft ready in Course editor. Your accepted course is preserved until you use it.")
-        except CourseError as error:
-            st.error(str(error))
-
-with course_tab:
-    if st.session_state.candidate:
-        st.subheader("Generated draft · review before accepting")
-        st.caption("This pending draft is kept only in the current session. Accept it before saving a course project.")
-        st.text_area("Generated Markdown", key="candidate", height=300, max_chars=400000)
-        st.checkbox("Replace accepted course", key="replace_draft")
-        st.button("Use this draft", on_click=accept_draft)
-    st.subheader("Accepted course")
-    st.text_area("Course material (Markdown)", key="content", height=440, max_chars=400000)
-    st.text_input("Revision instructions", key="revision_instructions", max_chars=5000,
-                  placeholder="Add worked examples to module 2 and preserve the remaining modules.")
-    st.button("Revise with engine", on_click=revise)
-
-with preview_tab:
+def use_draft():
     try:
-        project = make_project(st.session_state.source, st.session_state.course_title,
-                               st.session_state.content, st.session_state.engine_used)
-        a, b, c = st.columns(3)
-        a.download_button("Save project JSON", project_bytes(project), "course-project.json", "application/json", width="stretch")
-        b.download_button("Course Markdown", project["content"], "course.md", "text/markdown", disabled=not project["content"], width="stretch")
-        c.download_button("Complete course ZIP", export_bundle(project), "course-package.zip", "application/zip", disabled=not project["content"], width="stretch")
-        st.caption("Review facts, answers, coverage, grading, and references before sharing. Local mode creates a framework with explicit content placeholders.")
-        if project["content"]:
-            st.markdown(project["content"], unsafe_allow_html=False)
-        else:
-            st.caption("Generate and accept a draft, or write material in the course editor.")
+        if (state.content or (state.pending and state.source != state.pending['syllabus'])) and not state.replace_course:
+            raise CourseError('Select Replace current course before using this draft.')
+        saved = accept_job(project(), state.pending)
+        state.update(source=saved['syllabus'], course_title=saved['title'], content=saved['content'],
+                     engine_used=saved['engine'], model_used=saved['model'], accepted_source=saved['accepted_syllabus'], pending=None,
+                     replace_course=False)
+        notify('Course ready. Edit if needed and save your project.')
+    except CourseError as error:
+        notify(str(error), True)
+
+
+st.title('Course Framework')
+st.caption('Syllabus → modules, activities, videos.')
+if state.notice:
+    (st.error if state.notice_error else st.success)(state.notice)
+
+left, right = st.columns([2, 3], gap='large')
+with left:
+    st.text_area('Syllabus', key='source', height=280, max_chars=180000,
+                 placeholder='Paste your syllabus here…\n\nWeek 1: Topic\nWeek 2: Topic')
+    agent, key = st.columns([1, 1])
+    options = ([*GEMINI_MODELS, CUSTOM_MODEL] if state.provider == PROVIDERS[1] else
+               ['Offline template'] if state.provider == PROVIDERS[0] else [CUSTOM_MODEL])
+    if state.model_choice not in options:
+        state.model_choice = options[0]
+    agent.selectbox('Agent model', options, key='model_choice', help='Presets are shortcuts; availability depends on your provider account.')
+    if state.provider != PROVIDERS[0]:
+        key.text_input('API key', type='password', key='api_key')
+    if state.model_choice == CUSTOM_MODEL:
+        st.text_input('Model ID', key='custom_model', placeholder='Provider model ID')
+    with st.expander('Settings & files'):
+        st.selectbox('Provider', PROVIDERS, key='provider', on_change=provider_changed)
+        if state.provider == PROVIDERS[2]:
+            st.text_input('API base URL', key='endpoint', on_change=lambda: state.update(online_consent=False))
+        st.text_input('Title (optional)', key='course_title')
+        st.button('Clear key', on_click=lambda: state.update(api_key=''))
+        st.file_uploader('Import syllabus', type=['txt', 'md', 'docx', 'pdf'], key='syllabus_file')
+        st.checkbox('Replace syllabus', key='replace_source')
+        a, b = st.columns(2)
+        a.button('Import', on_click=import_source)
+        b.button('Example', on_click=example)
+        st.file_uploader('Open project', type=['json'], key='project_file')
+        st.checkbox('Replace project', key='replace_project')
+        st.button('Open', on_click=open_project)
+        st.caption('Keys stay in this session. Save a project to keep your course and unfinished modules.')
+    count = 0
+    try:
+        if state.source.strip():
+            plan = analyze_syllabus(state.source)
+            count = len(plan['topics'])
+            st.caption(f"{count} modules · {len(plan['outcomes'])} outcomes")
+            with st.expander('Outline'):
+                for i, topic in enumerate(plan['topics'], 1):
+                    st.write(f"{i}. {topic['title']} · {topic['schedule'] or 'Week unassigned'}")
+                for warning in plan['warnings']:
+                    st.caption(warning)
+        scope_options = [-1, *range(count)]
+        if state.get('module_scope', -1) not in scope_options:
+            state.module_scope = -1
+        if count:
+            st.selectbox('Modules', scope_options, key='module_scope',
+                         format_func=lambda i: f'All modules ({count})' if i == -1 else f"{i + 1}. {plan['topics'][i]['title']}")
+        if state.provider != PROVIDERS[0]:
+            st.checkbox('Send syllabus to this agent (fees/quota may apply)', key='online_consent')
+        resumable = bool(count) and can_resume(state.pending, state.source, state.course_title, config(), selected_indices())
+        requests = count if state.get('module_scope', -1) == -1 else 1
+        if resumable:
+            requests -= len(state.pending['completed'])
+        st.button('Resume' if resumable else 'Generate', type='primary', on_click=generate, disabled=not count, width='stretch')
+        if count and state.provider != PROVIDERS[0]:
+            st.caption(f'{requests} module request(s) · completed modules are kept if a request fails.')
     except CourseError as error:
         st.error(str(error))
+
+with right:
+    st.subheader('Course')
+    job = state.pending
+    if job:
+        st.caption(f"Draft · {len(job['completed'])}/{len(job['indices'])} modules · {job['model'] or 'Offline template'}")
+        if is_complete(job):
+            if state.content or state.source != job['syllabus']:
+                st.checkbox('Replace current course', key='replace_course')
+            st.button('Use draft', on_click=use_draft, type='primary')
+        st.markdown(draft_text(job), unsafe_allow_html=False)
+    elif state.content:
+        st.markdown(state.content, unsafe_allow_html=False)
+    else:
+        st.caption('Paste a syllabus and generate your first draft.')
+    if state.content:
+        with st.expander('Edit course' if not job else 'Accepted course'):
+            st.text_area('Course Markdown', key='content', height=360, max_chars=400000)
+    if state.source or state.content or job:
+        st.divider()
+        try:
+            saved = project()
+            a, b = st.columns(2)
+            a.download_button('Save project', project_bytes(saved), 'course-project.json', 'application/json', width='stretch')
+            b.download_button('Export course', export_bundle({**saved, 'pending': None}), 'course-package.zip',
+                              'application/zip', disabled=not state.content, width='stretch')
+            st.caption('Review facts, answers, and videos before teaching. Save project also keeps unfinished drafts.')
+        except CourseError as error:
+            st.error(str(error))

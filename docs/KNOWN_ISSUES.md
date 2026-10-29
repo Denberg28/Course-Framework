@@ -1,15 +1,12 @@
 # Known issues and validation limits
 
-- **Academy alignment:** visual tokens are based on the current Academy source; real Windows side-by-side comparison, high-DPI, and screen-reader acceptance remain pending. No Academy account/content integration is implemented.
-- **Live providers not tested:** no user key is available. API shapes, auth placement, refusal/truncation handling, and failures are covered with deterministic simulated responses. Account/model access and teaching quality still require a user-run check.
-- **Display size:** minimum supported desktop display is 1024×768; the workspace minimum is 940×620.
-- **Candidate release:** Windows automated UI and packaged-executable checks run in GitHub Actions. Manual Windows 10/11 use, high-DPI layout, keyboard/screen-reader accessibility, and long-session behavior need real desktop validation before stable promotion.
-- **Input parsing:** format detection is heuristic, not semantic extraction. Complex tables, merged cells, and scanned PDFs may need manual cleanup/OCR. Imported week labels remain source values; calendar conflicts are not automatically resolved.
-- **Long courses:** single-request generation may exceed provider context/output limits. Split the syllabus into smaller sections; output-limit responses do not overwrite the accepted course.
-- **Generic provider support:** Gemini and Chat Completions compatible APIs are implemented. Native formats such as Anthropic Messages, Azure deployment auth, and proprietary engines require another adapter.
-- **Persistence:** API keys and pending drafts are session-only. Accept pending drafts before saving. Streamlit sessions and cloud local disks are not a durable project store; download JSON to retain work.
-- **Preview:** native editing and HTML export show Markdown text rather than a rich Word/LMS layout. No DOCX/PDF export, SCORM package, or LMS integration is claimed.
-- **Cancellation:** discarding a result does not terminate the provider's request or refund it. The app waits for the worker before starting another; the socket timeout is not a strict whole-request deadline against a slowly streaming server.
-- **Distribution:** the Windows package is unsigned; no signing identity was created or changed.
-
-There are no known critical/high defects after the documented candidate checks. Missing verification is kept explicit and does not imply stable readiness.
+- **Live AI not validated:** provider tests simulate responses. Preset IDs do not guarantee model/quota access. Generated facts, examples, answers, activity quality, syllabus alignment, and references require instructor review.
+- **Video resources:** YouTube search links and supplied YouTube/Vimeo URLs are available. There is no live video discovery, ranking, embedding, or link/content verification.
+- **Durability:** session memory retains completed modules after a provider failure. Save project before closing/reloading to preserve accepted content and unfinished drafts. There is no autosave or cloud account storage. A crash before saving can lose work.
+- **Resume:** requires the same source, title, selected modules, provider, model, and compatible endpoint. Endpoints/keys are not saved; configure them again on reopen. A first-module failure retains an older pending draft and starts fresh on the next attempt.
+- **Provider load:** one call per selected module, sequentially; a large course can use up to 80 requests. There is no automatic retry/rate pacing. Quota errors stop the sequence; the user can Resume after resolving quota. Each call uses a socket timeout, not a strict whole-course deadline.
+- **Pause:** Windows Pause completes the active request then stops. It cannot reverse provider processing/billing. Streamlit has no in-app pause control; provider failures stop the sequence and allow Resume. Only the last delivered checkpoint is included if saving while a Windows request is active.
+- **Project compatibility:** format 1 migrates to 2. Releases before v0.2 cannot open format 2. Keep Markdown exports when reverting. Export course excludes pending work; Save project includes it.
+- **Parsing/output limits:** OCR scans and complex tables need cleanup. Limits are 8 MB/file, 100 PDF pages, 180k source characters, 80 detected modules, and 400k characters each for accepted material and rendered pending draft. Split larger courses using selected modules or syllabus sections.
+- **Desktop acceptance:** native/package CI and screen captures do not establish manual Windows usability, high-DPI/accessibility, or long-session readiness. Minimum display 1024×768; workspace minimum 940×620. Distribution remains unsigned.
+- **Export/integration:** native text editing and printable HTML retain Markdown text. No DOCX/PDF/SCORM export, Academy account integration, or subject publication is implemented. Arbitrary provider-native APIs need adapters; Chat Completions compatibility is required for custom endpoints.

@@ -14,7 +14,7 @@ from course_core import (CourseError, SAMPLE, VERSION, analyze_syllabus, atomic_
                          export_bundle, export_html, extract_text, load_project,
                          make_project, project_bytes, read_file)
 from engines import EngineConfig, PROVIDERS
-from workflow import GEMINI_MODELS, accept_job, advance, can_resume, draft_text, is_complete, new_job
+from course_workflow import GEMINI_MODELS, accept_job, advance, can_resume, draft_text, is_complete, new_job
 
 
 class CourseMaker:
@@ -42,7 +42,7 @@ class CourseMaker:
         self.view = tk.StringVar(value='Course')
         self.summary = tk.StringVar(value='Paste a syllabus to begin.')
         self.status = tk.StringVar(value='Ready')
-        self.settings_open = tk.BooleanVar(value=False)
+        self.settings = None
         self.title.trace_add('write', lambda *_: self.mark_dirty())
 
         header = ttk.Frame(root, padding=(18, 12))
@@ -85,18 +85,7 @@ class CourseMaker:
         ttk.Label(self.input_panel, text='API key', style='Muted.TLabel').pack(anchor='w')
         self.key_entry = ttk.Entry(self.input_panel, textvariable=self.key, show='•')
         self.key_entry.pack(fill='x', pady=(3, 5))
-        ttk.Checkbutton(self.input_panel, text='Settings', variable=self.settings_open, command=self.toggle_settings).pack(anchor='w')
-        self.settings = ttk.Frame(self.input_panel)
-        self.settings.columnconfigure(1, weight=1)
-        for row, (label_text, widget) in enumerate([
-            ('Provider', ttk.Combobox(self.settings, textvariable=self.provider, values=PROVIDERS, state='readonly')),
-            ('Base URL', ttk.Entry(self.settings, textvariable=self.endpoint)),
-            ('Title', ttk.Entry(self.settings, textvariable=self.title))]):
-            ttk.Label(self.settings, text=label_text, style='Muted.TLabel').grid(row=row, column=0, sticky='w', padx=(0, 8))
-            widget.grid(row=row, column=1, sticky='ew', pady=3)
-            if row == 0:
-                widget.bind('<<ComboboxSelected>>', self.provider_changed)
-        ttk.Button(self.settings, text='Clear key', command=lambda: self.key.set('')).grid(row=3, column=1, sticky='w')
+        ttk.Button(self.input_panel, text='Settings…', command=self.toggle_settings).pack(anchor='w', pady=(0, 3))
         self.scope_picker = ttk.Combobox(self.input_panel, textvariable=self.scope, state='readonly', values=['All modules'])
         self.scope_picker.pack(fill='x', pady=(6, 4))
         ttk.Checkbutton(self.input_panel, text='Send syllabus to agent · fees/quota may apply', variable=self.consent).pack(anchor='w', pady=(0, 5))
@@ -174,10 +163,26 @@ class CourseMaker:
             self.root.title(f'* Course Framework {VERSION}')
 
     def toggle_settings(self):
-        if self.settings_open.get():
-            self.settings.pack(fill='x', before=self.scope_picker)
-        else:
-            self.settings.pack_forget()
+        if self.settings is not None and self.settings.winfo_exists():
+            self.settings.lift()
+            return
+        self.settings = tk.Toplevel(self.root)
+        self.settings.title('Settings')
+        self.settings.transient(self.root)
+        self.settings.geometry('460x245')
+        form = ttk.Frame(self.settings, padding=16)
+        form.pack(fill='both', expand=True)
+        form.columnconfigure(1, weight=1)
+        for row, (label, widget) in enumerate([
+            ('Provider', ttk.Combobox(form, textvariable=self.provider, values=PROVIDERS, state='readonly')),
+            ('Compatible URL', ttk.Entry(form, textvariable=self.endpoint)),
+            ('Title', ttk.Entry(form, textvariable=self.title))]):
+            ttk.Label(form, text=label, style='Muted.TLabel').grid(row=row, column=0, sticky='w', padx=(0, 10))
+            widget.grid(row=row, column=1, sticky='ew', pady=5)
+            if row == 0:
+                widget.bind('<<ComboboxSelected>>', self.provider_changed)
+        ttk.Button(form, text='Clear key', command=lambda: self.key.set('')).grid(row=3, column=0, sticky='w', pady=10)
+        ttk.Button(form, text='Done', command=self.settings.destroy).grid(row=3, column=1, sticky='e', pady=10)
 
     def provider_changed(self, event=None):
         self.key.set('')

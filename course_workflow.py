@@ -113,7 +113,8 @@ def advance(job, config, *, transport=None):
     text = generate_course(job['syllabus'], job['title'], config, module_index=index, transport=transport)
     text = re.sub(r'(?ms)^### Video resources\s*\n.*?(?=^### |^## |\Z)', '', text)
     text = remove_invented_video_links(text, job['syllabus'])
-    text = re.sub(r'(?m)^#{1,2} .+\n?', '', text).strip()
+    text = re.sub(r'(?m)^#{1,2} .+\n?', '', text)
+    text = re.sub(r'(?im)^\*\*Week\(s\):\*\*[^\n]*(?:\n|$)', '', text).strip()
     module = f"## Module {index + 1}: {topic['title']}\n\n**Week(s):** {topic['schedule'] or 'Unassigned'}\n\n{text}\n\n"
     module += video_resources(job['syllabus'], topic['title'], job['title']) + '\n'
     updated = validate_pending({**job, 'completed': [*job['completed'], module]})

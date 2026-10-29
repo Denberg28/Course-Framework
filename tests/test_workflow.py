@@ -7,7 +7,7 @@ from unittest.mock import patch
 from course_core import (CourseError, SAMPLE, load_project, make_project, project_bytes,
                          validate_pending, export_bundle)
 from engines import EngineConfig, generate_course
-from workflow import (accept_job, advance, can_resume, draft_text, is_complete, new_job,
+from course_workflow import (accept_job, advance, can_resume, draft_text, is_complete, new_job,
                       video_resources)
 
 MODULE = '''### Learning objectives

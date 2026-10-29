@@ -8,7 +8,7 @@ from PIL import ImageGrab
 from course_core import SAMPLE
 from desktop import CourseMaker
 from engines import EngineConfig
-from workflow import accept_job, advance, new_job
+from course_workflow import accept_job, advance, new_job
 
 
 def main():

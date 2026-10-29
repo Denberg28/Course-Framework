@@ -4,7 +4,7 @@ Target: **0.2.0-rc.1**, baseline `dc53a28`. Evidence is automated and self-revie
 
 | Gate | Check |
 |---|---|
-| Source | `python -m compileall -q app.py desktop.py academy_theme.py course_core.py engines.py workflow.py tests tools`; `git diff --check` |
+| Source | `python -m compileall -q app.py desktop.py academy_theme.py course_core.py engines.py course_workflow.py tests tools`; `git diff --check` |
 | Core/persistence | File parsing/bounds; atomic failure retains prior file; v1→v2 migration; accepted edits and partial checkpoints round-trip; allow-lists exclude secrets |
 | Generation | One call per module; required sections; quota/truncation failure preserves previous success; resume does not replay completed modules; source/model/endpoint changes do not resume |
 | Resources | Topic searches URL-encode syllabus titles; supplied video links retained; new direct video links removed; no provider call in offline mode |

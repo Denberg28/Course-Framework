@@ -5,7 +5,7 @@ from academy_theme import streamlit_css
 from course_core import (CourseError, SAMPLE, VERSION, analyze_syllabus, export_bundle,
                          extract_text, load_project, make_project, project_bytes)
 from engines import EngineConfig, PROVIDERS
-from workflow import (CUSTOM_MODEL, GEMINI_MODELS, accept_job, advance, can_resume,
+from course_workflow import (CUSTOM_MODEL, GEMINI_MODELS, accept_job, advance, can_resume,
                       draft_text, is_complete, new_job)
 
 st.set_page_config(page_title='Course Framework', page_icon='📘', layout='wide')

@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from course_core import CourseError, SAMPLE, load_project, make_project
 from engines import EngineConfig, PROVIDERS
-from workflow import advance, new_job
+from course_workflow import advance, new_job
 
 
 @unittest.skipUnless(os.name == 'nt' or os.environ.get('DISPLAY'), 'Requires Windows desktop or X display')
@@ -119,6 +119,16 @@ class DesktopTests(unittest.TestCase):
                                  self.root.winfo_rootx() + self.root.winfo_width())
             self.assertLessEqual(widget.winfo_rooty() + widget.winfo_height(),
                                  self.root.winfo_rooty() + self.root.winfo_height())
+
+    def test_settings_do_not_displace_primary_controls(self):
+        self.root.geometry('940x620')
+        self.root.update()
+        before = self.app.generate_button.winfo_rooty()
+        self.app.toggle_settings()
+        self.root.update()
+        self.assertTrue(self.app.settings.winfo_viewable())
+        self.assertEqual(self.app.generate_button.winfo_rooty(), before)
+        self.app.settings.destroy()
 
     def test_acceptance_restores_source_snapshot_only_after_confirmation(self):
         self.local_sample()

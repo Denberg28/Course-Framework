@@ -49,7 +49,7 @@ For the Windows app, install `requirements-desktop.txt` and run `desktop.py`. Tk
 
 ```powershell
 py -3.12 -m unittest discover -s tests -v
-py -3.12 -m compileall -q app.py desktop.py academy_theme.py course_core.py engines.py workflow.py tests tools
+py -3.12 -m compileall -q app.py desktop.py academy_theme.py course_core.py engines.py course_workflow.py tests tools
 py -3.12 desktop.py --smoke-test
 py -3.12 -m pip install -r requirements-build.txt
 py -3.12 -m PyInstaller --noconfirm --clean --windowed --onedir --name CourseFramework desktop.py

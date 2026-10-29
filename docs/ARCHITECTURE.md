@@ -1,6 +1,6 @@
 # Architecture
 
-`course_core.py` owns extraction, outline parsing, bounded project schemas, atomic writes, and exports. `engines.py` owns HTTPS adapters and module prompts. `workflow.py` owns sequential module jobs, resume matching, deterministic video resources, and draft acceptance. `desktop.py` and `app.py` present the same workflow; `academy_theme.py` owns shared visual tokens.
+`course_core.py` owns extraction, outline parsing, bounded project schemas, atomic writes, and exports. `engines.py` owns HTTPS adapters and module prompts. `course_workflow.py` owns sequential module jobs, resume matching, deterministic video resources, and draft acceptance. `desktop.py` and `app.py` present the same workflow; `academy_theme.py` owns shared visual tokens.
 
 The user flow is **paste → select agent/scope → Generate → review → Use draft → save/export**. Windows uses a single split workspace. Streamlit uses one page with no workflow tabs. File/provider options are secondary; outline review is optional. The key is session-only and provider changes clear key/consent. Preset model IDs are editable shortcuts, not proof of account availability. There are no background model probes or paid retries.
 
@@ -15,3 +15,5 @@ Project format 2 fields: `schema_version`, `title`, `syllabus`, `content`, `engi
 Video resources are generated locally: two URL-encoded YouTube topic searches and explicit HTTPS YouTube/Vimeo links extracted from the supplied syllabus. Model-authored video sections are replaced, and new direct YouTube/Vimeo URLs absent from the syllabus are removed. No video search API, account, discovery/ranking, player, or availability/accuracy validation is implemented. All raw model content remains untrusted; HTML is disabled in Streamlit previews, native editing is plain text, and printable HTML escapes Markdown.
 
 HTTPS adapters refuse redirects, keep Gemini credentials in headers, use sanitized errors, bound response sizes, and reject unfinished outputs. Streamlit compatible endpoints require public HTTPS; Windows permits localhost HTTP. This release does not alter authentication protocols or add Aero Academy content/account integration.
+
+The generation module is named `course_workflow.py` to avoid PyInstaller’s third-party `workflow` hook. Native provider details open in a small Settings dialog so expanding them cannot push Generate off a short display.

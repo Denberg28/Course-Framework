@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0-rc.3 — Fit smaller Windows displays
+
+- Fit the initial window within the display with room for window chrome and the taskbar; retain the 940×620 minimum workspace.
+- Bound automated Windows captures to the display so footer controls remain visible on 1024×768 runners.
+- Add a native startup-size regression check. Windows desktop target: displays of at least 1024×768.
+
+
 ## 0.1.0-rc.2 — Aero Academy UI alignment
 
 - Match the Academy white/navy/gold palette with compact Segoe UI typography, light dividers, and restrained headings.

@@ -21,6 +21,11 @@ class DesktopTests(unittest.TestCase):
             self.root.after_cancel(timer)
         self.root.destroy()
 
+    def test_startup_window_fits_supported_display(self):
+        self.assertLessEqual(self.root.winfo_width(), self.root.winfo_screenwidth() - 40)
+        self.assertLessEqual(self.root.winfo_height(), self.root.winfo_screenheight() - 100)
+        self.assertTrue(self.app.generate_button.winfo_viewable())
+
     def test_sidebar_and_programmatic_navigation_stay_in_sync(self):
         for index, page in enumerate((self.app.source_tab, self.app.draft_tab,
                                       self.app.editor_tab, self.app.settings_tab)):

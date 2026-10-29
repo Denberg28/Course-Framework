@@ -1,0 +1,95 @@
+name: Verify and package course maker
+
+on:
+  push:
+    branches: [main, 'feature/**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install -r requirements.txt
+      - run: python -m compileall -q app.py desktop.py course_core.py engines.py tests
+      - run: git diff --check
+      - run: python -m unittest discover -s tests -v
+      - name: Native Windows startup
+        if: runner.os == 'Windows'
+        run: python desktop.py --smoke-test
+
+  windows-package:
+    needs: verify
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install -r requirements-build.txt
+      - name: Build Windows desktop
+        run: python -m PyInstaller --noconfirm --clean --windowed --onedir --name CourseFramework desktop.py
+      - name: Verify packaged executable
+        shell: pwsh
+        run: |
+          $process = Start-Process -FilePath dist/CourseFramework/CourseFramework.exe -ArgumentList '--smoke-test' -PassThru
+          if (-not $process.WaitForExit(60000)) {
+            $process.Kill()
+            throw 'Packaged startup exceeded 60 seconds'
+          }
+          if ($process.ExitCode -ne 0) { throw "Packaged startup failed: $($process.ExitCode)" }
+      - name: Package and checksum
+        shell: pwsh
+        run: |
+          $version = python -c "from course_core import VERSION; print(VERSION)"
+          New-Item -ItemType Directory -Force release | Out-Null
+          Copy-Item README.md,CHANGELOG.md dist/CourseFramework/
+          Compress-Archive -Path dist/CourseFramework -DestinationPath "release/CourseFramework-$version-Windows-x64.zip"
+          $archive = Get-Item "release/CourseFramework-$version-Windows-x64.zip"
+          $hash = (Get-FileHash $archive.FullName -Algorithm SHA256).Hash.ToLower()
+          "$hash  $($archive.Name)" | Set-Content -Encoding ascii release/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CourseFramework-Windows-x64
+          path: release/*
+          if-no-files-found: error
+
+  publish-candidate:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: windows-package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: CourseFramework-Windows-x64
+          path: release
+      - name: Publish immutable test candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          version=$(python -c 'from course_core import VERSION; print(VERSION)')
+          tag="v$version"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists; refusing to replace it."
+            exit 0
+          fi
+          gh release create "$tag" release/* --target "$GITHUB_SHA" --prerelease --title "Course Framework $version — Windows test candidate" --notes-file docs/RELEASE_NOTES.md

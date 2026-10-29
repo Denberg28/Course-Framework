@@ -1,1 +1,2 @@
-streamlit
+-r requirements-desktop.txt
+streamlit==1.50.0

@@ -24,3 +24,10 @@ env/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Local projects, credentials and build output
+.streamlit/secrets.toml
+build/
+dist/
+*.spec
+local-projects/

@@ -4,7 +4,7 @@ A Windows course maker that turns a syllabus into an editable teaching draft. Im
 
 ## Windows download
 
-Download the Windows x64 ZIP from [GitHub Releases](https://github.com/Denberg28/Course-Framework/releases), extract the **entire folder**, and run `CourseFramework.exe`. Python is not needed for the packaged app. Target: Windows 10/11 x64. The first release is a **test candidate**, pending manual Windows usability checks and live provider validation.
+Download the Windows x64 ZIP from [GitHub Releases](https://github.com/Denberg28/Course-Framework/releases), extract the **entire folder**, and run `CourseFramework.exe`. Python is not needed for the packaged app. Target: Windows 10/11 x64, display 1024×768 or larger. The first release is a **test candidate**, pending manual Windows usability checks and live provider validation.
 
 The application is unsigned. This project does not claim publisher verification or stable readiness.
 

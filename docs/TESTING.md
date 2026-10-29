@@ -1,6 +1,6 @@
 # Verification and release gates
 
-Target version: **0.1.0-rc.2**. UI baseline: `2f12c31`. Evidence tier: self-reviewed, automated behavior/integration tests; simulated provider responses. Final build/commit/run evidence is attached to GitHub Actions and the release. This document does not claim live-provider or manual desktop validation.
+Target version: **0.1.0-rc.3**. UI baseline: `2f12c31`. Evidence tier: self-reviewed, automated behavior/integration tests; simulated provider responses. Final build/commit/run evidence is attached to GitHub Actions and the release. This document does not claim live-provider or manual desktop validation.
 
 ## Acceptance criteria and required automated checks
 
@@ -35,3 +35,7 @@ The native suite checks left navigation, programmatic draft/acceptance transitio
 ### Local validation — 29 October 2026
 
 Python 3.12.14: all **29 tests passed**, including six native Tk tests on an Xvfb Linux display. Source smoke test passed. Syllabus/editor/minimum-size settings screenshots were captured from the actual Tk widgets and visually reviewed; the Linux font fallback does not establish Windows Segoe UI parity. Compile/whitespace checks passed. Windows CI/package and high-DPI/live-provider validation remain pending. Publication was explicitly authorized in the follow-up. Windows CI and packaged executable gates must pass before the rc.2 candidate is published.
+
+### Small-display follow-up for rc.3
+
+Windows rc.2 screenshots revealed that requesting 1160×790 on a 1024×768 runner put the footer outside the captured screen. The rc.3 startup window and capture utility now fit within the supported display with space for chrome/taskbar, and a native regression check covers those bounds. The existing 940×620 workspace minimum is retained; supported desktop displays are 1024×768 or larger. rc.2 Windows regression, build, and packaged-startup checks passed; rc.3 requires its own CI run before publication.

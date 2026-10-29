@@ -19,7 +19,10 @@ def main():
         for name, page, size in [('syllabus', app.source_tab, '1160x790'),
                                  ('course', app.editor_tab, '1160x790'),
                                  ('engine-minimum', app.settings_tab, '940x620')]:
-            root.geometry(size)
+            width, height = map(int, size.split("x"))
+            width = min(width, root.winfo_screenwidth() - 40)
+            height = min(height, root.winfo_screenheight() - 100)
+            root.geometry(f"{width}x{height}+20+20")
             app.tabs.select(page)
             root.update()
             root.lift()

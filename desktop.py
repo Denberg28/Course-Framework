@@ -31,7 +31,9 @@ class CourseMaker:
         self.discard_result = False
         self.results = queue.Queue(maxsize=1)
         root.title(f"Course Framework {VERSION}")
-        root.geometry("1160x790")
+        width = min(1160, max(940, root.winfo_screenwidth() - 40))
+        height = min(790, max(620, root.winfo_screenheight() - 100))
+        root.geometry(f"{width}x{height}+20+20")
         root.minsize(940, 620)
         self.style = apply_desktop_theme(root)
         header = ttk.Frame(root, padding=(18, 12))

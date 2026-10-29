@@ -44,6 +44,8 @@ class NoRedirect(HTTPRedirectHandler):
 
 
 def validate_endpoint(base_url: str, allow_local: bool) -> str:
+    if len(base_url) > 2048 or not base_url.isascii() or any(c.isspace() or ord(c) < 32 for c in base_url):
+        raise CourseError("Use an ASCII API base URL without spaces or control characters.")
     try:
         url = urlsplit(base_url.strip().rstrip("/"))
         port = url.port
@@ -111,7 +113,7 @@ def generate_course(syllabus: str, title: str, config: EngineConfig, *, draft: s
         raise CourseError("Enter an API key for the selected provider.")
     if not config.model.strip() or len(config.model) > 200 or not re.fullmatch(r"[\w./:-]+", config.model):
         raise CourseError("Enter the provider's model ID using letters, numbers, dots, slashes, colons, or hyphens.")
-    if "\n" in config.api_key or "\r" in config.api_key or len(config.api_key) > 4096:
+    if not config.api_key.isascii() or any(ord(c) < 32 for c in config.api_key) or len(config.api_key) > 4096:
         raise CourseError("The API key format is invalid.")
     prompt = f"Course title: {title}\n\n<syllabus>\n{syllabus}\n</syllabus>"
     if draft:

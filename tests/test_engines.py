@@ -39,6 +39,7 @@ class EngineTests(unittest.TestCase):
     def test_reject_missing_key_invalid_model_and_local_revision(self):
         for config, draft in [(EngineConfig('Google AI Studio (Gemini)'), ''),
                               (EngineConfig('Google AI Studio (Gemini)', 'fake', 'bad model'), ''),
+                              (EngineConfig('Google AI Studio (Gemini)', 'invalid🔑'), ''),
                               (EngineConfig(), 'Draft')]:
             with self.subTest(config=config), self.assertRaises(CourseError):
                 generate_course(SAMPLE, 'Course', config, draft=draft)
@@ -55,7 +56,8 @@ class EngineTests(unittest.TestCase):
 
     def test_endpoint_credential_and_insecure_url_rejected(self):
         for url in ['http://example.com/v1', 'https://user:secret@example.com/v1', 'https://example.com?key=secret',
-                    'https://example.com#fragment', 'https://example.com:bad/v1', 'not-a-url']:
+                    'https://example.com#fragment', 'https://example.com:bad/v1', 'not-a-url',
+                    'https://example.com/bad path', 'https://例子.com/v1']:
             with self.subTest(url=url), self.assertRaises(CourseError):
                 validate_endpoint(url, True)
         with self.assertRaises(CourseError):

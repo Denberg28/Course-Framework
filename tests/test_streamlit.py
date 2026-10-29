@@ -25,11 +25,26 @@ class StreamlitTests(unittest.TestCase):
         self.assertEqual(len(self.app.session_state['pending']['completed']), 5)
         self.click('Use draft')
         self.assertIn('## Module 1:', self.app.session_state['content'])
-        self.assertIn('### Video resources', self.app.session_state['content'])
+        self.assertNotIn('### Video resources', self.app.session_state['content'])
+        self.assertIn('### Discussion and presentation', self.app.session_state['content'])
         self.app.text_area(key='content').set_value('# My edits').run()
         self.app.run()
         self.assertEqual(self.app.session_state['content'], '# My edits')
         self.assertEqual(len(self.app.get('download_button')), 2)
+
+    def test_assessment_and_answer_key_are_collapsed(self):
+        self.click('Example')
+        self.app.text_input(key='api_key').set_value('fake-key').run()
+        self.app.checkbox(key='online_consent').check().run()
+        self.app.selectbox(key='module_scope').select(0).run()
+        with patch('engines.request_json', return_value=response()):
+            self.click('Generate')
+        labels = [e.label for e in self.app.expander]
+        self.assertIn('Assessment · 5 questions', labels)
+        self.assertIn('Answer key', labels)
+        for expander in self.app.expander:
+            if expander.label in {'Assessment · 5 questions', 'Answer key'}:
+                self.assertFalse(expander.proto.expanded)
 
     def test_model_selector_custom_and_provider_change_clear_credentials(self):
         self.app.selectbox(key='model_choice').select('gemini-3.5-flash-lite').run()

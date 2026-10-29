@@ -6,6 +6,7 @@ from course_core import (CourseError, SAMPLE, VERSION, analyze_syllabus, export_
                          extract_text, load_project, make_project, project_bytes)
 from engines import EngineConfig, PROVIDERS
 from hosted_keys import gemini_secret
+from lesson_format import presentation_parts
 from course_workflow import (CUSTOM_MODEL, GEMINI_MODELS, accept_job, advance, can_resume,
                       draft_text, is_complete, new_job)
 
@@ -135,8 +136,24 @@ def use_draft():
         notify(str(error), True)
 
 
+def render_course(text):
+    for part in presentation_parts(text):
+        if part['title']:
+            st.markdown(part['title'])
+        st.markdown(part['body'], unsafe_allow_html=False)
+        if part['assessment']:
+            with st.expander('Assessment · 5 questions', expanded=False):
+                st.markdown(part['assessment'], unsafe_allow_html=False)
+        if part['key']:
+            with st.expander('Answer key', expanded=False):
+                st.markdown(part['key'], unsafe_allow_html=False)
+        if part['references']:
+            with st.expander('References', expanded=False):
+                st.markdown(part['references'], unsafe_allow_html=False)
+
+
 st.title('Course Framework')
-st.caption('Syllabus → modules, activities, videos.')
+st.caption('Syllabus → discussion, activity, assessment.')
 if state.notice:
     (st.error if state.notice_error else st.success)(state.notice)
 
@@ -216,9 +233,9 @@ with right:
             if state.content or state.source != job['syllabus']:
                 st.checkbox('Replace current course', key='replace_course')
             st.button('Use draft', on_click=use_draft, type='primary')
-        st.markdown(draft_text(job), unsafe_allow_html=False)
+        render_course(draft_text(job))
     elif state.content:
-        st.markdown(state.content, unsafe_allow_html=False)
+        render_course(state.content)
     else:
         st.caption('Paste a syllabus and generate your first draft.')
     if state.content:
@@ -232,6 +249,6 @@ with right:
             a.download_button('Save project', project_bytes(saved), 'course-project.json', 'application/json', width='stretch')
             b.download_button('Export course', export_bundle({**saved, 'pending': None}), 'course-package.zip',
                               'application/zip', disabled=not state.content, width='stretch')
-            st.caption('Review facts, answers, and videos before teaching. Save project also keeps unfinished drafts.')
+            st.caption('Review facts, official references, and answer keys before teaching. Save project also keeps unfinished drafts.')
         except CourseError as error:
             st.error(str(error))

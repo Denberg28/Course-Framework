@@ -1,13 +1,13 @@
 # Verification and release gates
 
-Target: **0.2.0-rc.2**, baseline `338f43b`. Evidence is automated and self-reviewed, with simulated provider responses. Live API and manual Windows/high-DPI/accessibility acceptance remain pending.
+Target: **0.3.0-rc.1**, baseline `e660951`. Evidence is automated and self-reviewed, with simulated provider responses. Live API and manual Windows/high-DPI/accessibility acceptance remain pending.
 
 | Gate | Check |
 |---|---|
-| Source | `python -m compileall -q app.py desktop.py academy_theme.py course_core.py engines.py course_workflow.py hosted_keys.py tests tools`; `git diff --check` |
+| Source | `python -m compileall -q app.py desktop.py academy_theme.py course_core.py engines.py course_workflow.py hosted_keys.py lesson_format.py reference_catalog.py tests tools`; `git diff --check` |
 | Core/persistence | File parsing/bounds; atomic failure retains prior file; v1→v2 migration; accepted edits and partial checkpoints round-trip; allow-lists exclude secrets |
 | Generation | One call per module; required sections; quota/truncation failure preserves previous success; resume does not replay completed modules; source/model/endpoint changes do not resume |
-| Resources | Topic searches URL-encode syllabus titles; supplied video links retained; new direct video links removed; no provider call in offline mode |
+| Teaching format | Ordered discussion/presentation subsections; five questions/options A–D; letter-only answer keys; malformed/missing items rejected; video sections/URLs removed; topic-scoped checked source catalog |
 | Streamlit | No workflow tabs; model/custom selection; consent; selected/all modules; draft acceptance; editor/download persistence; failure/resume; provider change clears credentials |
 | Native Windows | Single-workspace minimum/startup bounds; offline worker; pause after active module; accepted course preservation; partial save/reopen/resume; changed-source acceptance |
 | Package | Windows build; source `desktop.py --smoke-test`; packaged `CourseFramework.exe --smoke-test`; ZIP and SHA256 |
@@ -23,7 +23,8 @@ No user key, real paid API call, or live model availability probe is part of tes
 - Actual Gemini and compatible providers: choose an available model; generate selected/all modules; inspect substantive explanations, examples, activity steps/deliverables/time, assessment and references. Confirm the key/model/endpoint in use.
 - Quota/offline failure: preserve accepted content and completed modules; Save project, reopen, re-enter key and original endpoint, Resume; verify only unfinished modules are requested.
 - Pause during an active native request; verify its result is kept and the next request does not start. Save before closing/reloading. Confirm key exclusion in project and course ZIP.
-- Review all linked videos for topic, level, captions, accuracy, and availability. The app provides searches and supplied URLs, not verified video recommendations.
+- Check discussion sequence, worked-example units/assumptions, activity instructions/time, and correctness of all five MCQs and their letter keys. Confirm assessment/key expansion in Streamlit and Windows HTML Preview.
+- Verify the relevant official/publisher text, chapter, jurisdiction and revision. Catalog location checks do not establish claim correctness. No video recommendations should be generated.
 - Preserve v2 project and Markdown exports before any rollback. Prior releases cannot open format 2.
 
 Final test/commit/build/run evidence is attached to the GitHub workflow and release; this document does not claim those gates passed before they execute.
@@ -31,3 +32,7 @@ Final test/commit/build/run evidence is attached to the GitHub workflow and rele
 ## Hosted Secrets regression
 
 AppTest uses a fake deployment secret to verify Gemini request header placement, absence from rendered widgets/session/project data, provider isolation, manual fallback without Secrets, and sanitized invalid-secret errors. No live credential is used. The user confirmed that rebooting resolved the earlier deployed ImportError; no import-error workaround is included in this change.
+
+## Presentation checks
+
+Regression tests reject duplicate/missing MCQ choices, missing question numbers and invalid answer letters. HTML tests verify closed assessment/key details and escaped untrusted markup. Native tests verify Preview output without launching a real browser in CI. Existing saved content remains readable; the new contract fingerprint starts fresh for unfinished old drafts. The teaching/reference catalog sources and scope are recorded in docs/REFERENCE_CATALOG.md.

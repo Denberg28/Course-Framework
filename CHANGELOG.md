@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0-rc.1 — Focused teaching modules
+
+- Remove video suggestions and links from new module generation.
+- Restore introduction, presentation/discussion sequence, worked example, summary, and one practical activity.
+- Require five numbered multiple-choice questions with A–D options and a numbered letter-only answer key.
+- Collapse assessment, answer key and references in Streamlit and standalone HTML; add Windows Preview for that presentation.
+- Append topic-scoped checked official/publisher references (FAA, CAAP, EASA, MIT/OpenStax); distinguish validated source locations from unverified generated content.
+- Preserve existing projects; start a fresh draft for the new format. Keep one request per module and existing key/resume protections.
+
+
 ## 0.2.0-rc.2 — Streamlit Secrets key
 
 - Read a server-owned Gemini key from `st.secrets["GEMINI_API_KEY"]`; hide the API-key input when configured.

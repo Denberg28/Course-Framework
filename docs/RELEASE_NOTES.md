@@ -1,15 +1,11 @@
-# Course Framework 0.2.0-rc.2 — Direct course workflow
+# Course Framework 0.3.0-rc.1 — Focused teaching modules
 
-Set `GEMINI_API_KEY = "YOUR_KEY"` in Streamlit’s Settings → Secrets to configure Gemini server-side. The API-key input is hidden when configured; credentials never appear in widgets, session state, saved projects, or exports. The server key is never sent to custom providers. All app users share its quota. Without Secrets, manual session-only keys remain available.
+Generate only the syllabus-based discussion/presentation, activity, and assessment, with relevant official/publisher references. Video suggestions are removed from new modules.
 
-Paste a syllabus, choose an agent model, and Generate in one workspace. Review modules with lesson content, activities, assessments, and video resources, then Use draft and Save/Export. Streamlit no longer has workflow tabs; Windows places the syllabus/agent controls beside the course. File/provider options are secondary.
+Each discussion has an introduction, numbered presentation/discussion sequence, worked example, and summary. Assessment requires five numbered MCQs with options A–D and a separate five-line letter answer key. Streamlit collapses assessment/key/references; Windows Preview opens the same standalone HTML presentation. The native editor and Markdown export preserve the full editable content.
 
-Choose all modules or one module. Requests run one module at a time; failures retain completed modules and the accepted course. Resume continues unfinished work with the same syllabus/model/endpoint. Windows Pause finishes the current module before stopping. Save project keeps unfinished drafts; re-enter your session key when reopening. Preset Gemini models and custom IDs are selectable; availability depends on your provider account.
+Reference locations are selected from checked FAA, CAAP, EASA, MIT and OpenStax sources as appropriate to the syllabus/topic. The catalog validates source locations, not AI facts, exact regulatory clauses, applicability, or answer correctness. Instructor review remains required. Offline mode produces explicit placeholders, not fabricated answers.
 
-Video resources are topic search links and supplied YouTube/Vimeo URLs. Specific videos are not discovered or verified. Review all teaching content and resources before use. Offline generation produces explicit scaffolding/placeholders.
+The previous original AI version used a single shorter Flash-Lite request for the whole course. This release retains sequential requests per module and asks for compact content; no measured live speed improvement is claimed. Completed work survives provider failures; a fresh draft is needed to apply the new format to an older unfinished checkpoint. Existing accepted projects are preserved. Streamlit Secrets support is retained.
 
-Download the Windows x64 ZIP, extract the entire folder, and run CourseFramework.exe. Windows 10/11 x64, display 1024×768 or larger. Streamlit deployment: main/app.py, Python 3.12.
-
-Projects now use format 2 and include unfinished work plus model metadata, never API keys/endpoints. Format 1 projects migrate without losing accepted edits. Older app versions cannot open format 2; keep Markdown exports for rollback. Course export includes accepted content only.
-
-Required Linux/Windows tests, native startup, Windows packaging, packaged EXE startup, and UI captures must pass before publication. Provider tests use simulated responses. This is an unsigned prerelease; manual Windows/high-DPI/accessibility and live-provider acceptance remain pending. See docs/TESTING.md and docs/KNOWN_ISSUES.md.
+Download/extract the entire Windows x64 ZIP and run CourseFramework.exe (Windows 10/11, display 1024×768+). Streamlit: main/app.py, Python 3.12. Tests, native startup/captures, Windows packaging and packaged startup must pass before candidate publication. This is an unsigned prerelease; live-provider and manual Windows/high-DPI/accessibility checks remain pending.

@@ -50,7 +50,7 @@ Course Outline:
         content = build_course_markdown(SAMPLE)
         self.assertEqual(content.count('## Module '), 5)
         self.assertIn('[Add instructor-verified explanations', content)
-        self.assertIn('Answer guide', content)
+        self.assertIn('Answer key', content)
         self.assertIn('Week(s):** 3-4', content)
         self.assertNotIn('## Module 1: Course Code', content)
 

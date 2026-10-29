@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.0-rc.2 — Aero Academy UI alignment
+
+- Match the Academy white/navy/gold palette with compact Segoe UI typography, light dividers, and restrained headings.
+- Replace the desktop tab strip with synchronized left navigation ordered Syllabus → Review draft → Course editor, plus Engine settings.
+- Consolidate file actions in the top bar; wrap helper text and simplify provider guidance for smaller windows.
+- Align optional Streamlit colors/headings; preserve generation review, project format, persistence, and session-only keys.
+- Add native navigation/minimum-size regression checks and real UI captures to Windows CI. Future Academy data integration remains unimplemented.
+
+
 ## 0.1.0-rc.1 — 29 October 2026
 
 - Add a Windows Tk course maker with syllabus import, outline review, course editing, and draft staging.

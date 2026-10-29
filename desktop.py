@@ -5,6 +5,8 @@ from pathlib import Path
 import queue
 import sys
 import threading
+import tempfile
+import webbrowser
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
@@ -22,6 +24,7 @@ class CourseMaker:
         self.root, self.path = root, None
         self.dirty = self.loading = self.busy = False
         self.job = None
+        self.preview_dir = None
         self.engine_used, self.model_used, self.accepted_source = 'Local template', '', ''
         self.results = queue.Queue(maxsize=1)
         self.pause_event = threading.Event()
@@ -101,6 +104,7 @@ class CourseMaker:
         ttk.Label(result_bar, text='Course', style='Section.TLabel').pack(side='left')
         self.apply_button = ttk.Button(result_bar, text='Use draft', style='Accent.TButton', command=self.apply_draft, state='disabled')
         self.apply_button.pack(side='right')
+        ttk.Button(result_bar, text='Preview', command=self.preview).pack(side='right', padx=(0, 6))
         views = ttk.Frame(self.output_panel)
         views.pack(fill='x', pady=(0, 6))
         self.draft_radio = ttk.Radiobutton(views, text='Draft', value='Draft', variable=self.view, command=self.show_view, state='disabled')
@@ -392,13 +396,28 @@ class CourseMaker:
         except CourseError as error:
             self.error(error)
 
+    def preview(self):
+        try:
+            content = draft_text(self.job) if self.view.get() == 'Draft' and self.job else self.text(self.editor)
+            if not content.strip():
+                raise CourseError('Generate or open a module to preview it.')
+            if self.preview_dir is None:
+                self.preview_dir = tempfile.TemporaryDirectory(prefix='course-preview-')
+            path = Path(self.preview_dir.name) / 'course.html'
+            title = self.job['title'] if self.view.get() == 'Draft' and self.job else self.project()['title']
+            atomic_write(path, export_html(title, content))
+            webbrowser.open(path.as_uri())
+            self.status.set('Presentation preview opened · assessment and answer key can be expanded')
+        except (CourseError, OSError) as error:
+            self.error(error)
+
     def export(self):
         try:
             project = {**self.project(), 'pending': None}
             if not project['content'].strip():
                 raise CourseError('Review and use a complete draft before exporting. Save project keeps unfinished work.')
             path = filedialog.asksaveasfilename(defaultextension='.zip', initialfile='course-package.zip',
-                filetypes=[('Course package', '*.zip'), ('Markdown', '*.md'), ('HTML text view', '*.html')], parent=self.root)
+                filetypes=[('Course package', '*.zip'), ('Markdown', '*.md'), ('Lesson presentation', '*.html')], parent=self.root)
             if path:
                 suffix = Path(path).suffix.lower()
                 data = (project['content'].encode() if suffix == '.md' else export_html(project['title'], project['content'])
@@ -421,6 +440,8 @@ class CourseMaker:
             self.key.set('')
             for timer in self.root.tk.call('after', 'info'):
                 self.root.after_cancel(timer)
+            if self.preview_dir is not None:
+                self.preview_dir.cleanup()
             self.root.destroy()
 
 

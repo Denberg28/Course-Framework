@@ -8,19 +8,54 @@ from course_core import (CourseError, SAMPLE, load_project, make_project, projec
                          validate_pending, export_bundle)
 from engines import EngineConfig, generate_course
 from course_workflow import (accept_job, advance, can_resume, draft_text, is_complete, new_job,
-                      video_resources)
+                      remove_video_sections)
 
-MODULE = '''### Learning objectives
-Explain the source topic and apply it to a case.
-### Lesson content
-A substantive explanation with a worked example and its assumptions.
-### Learning activities
-1. Inspect the case. Submit an annotated explanation after 20 minutes.
-2. Compare two alternatives and justify a decision in a short report.
+MODULE = """### Discussion and presentation
+#### Introduction
+The learning objective is to describe a load path and explain why each structural connection must transfer the applied force through the assembly.
+#### Presentation sequence
+1. Begin with a diagram of an airframe and identify where an external load is introduced.
+2. Follow the force through the connected members, stating assumptions and asking learners to compare two possible paths.
+3. Discuss how a discontinuity changes the explanation, and distinguish a classroom model from an approved maintenance procedure.
+#### Worked example
+Use a simplified diagram with a labelled applied load and trace it to the supports. State the assumptions before drawing a conclusion.
+#### Summary
+A consistent explanation identifies the input load, connected members, supports, assumptions and limitations.
+### Activity
+Annotate a supplied structural diagram. Identify the load, trace its path and submit a justified explanation after twenty minutes.
 ### Assessment
-Explain the reasoning. Answer guide: identify assumptions and use evidence.
-Rubric: accuracy 40%, reasoning 40%, clarity 20%.
-'''
+1. Which item begins a load-path explanation?
+A. The applied load
+B. The paint colour
+C. The calendar date
+D. The page margin
+2. What should be stated before interpreting the diagram?
+A. A random preference
+B. The assumptions
+C. An unrelated rule
+D. The file extension
+3. What is the expected activity deliverable?
+A. An empty sheet
+B. An unlabelled sketch
+C. An annotated diagram
+D. A video suggestion
+4. Which conclusion requires verification against approved data?
+A. The diagram has labels
+B. The explanation has words
+C. The activity uses paper
+D. A maintenance approval claim
+5. What makes the explanation reviewable?
+A. Evidence and explicit assumptions
+B. Unrelated details
+C. An invented reference
+D. A missing load
+### Answer key
+1. A
+2. B
+3. C
+4. D
+5. A
+"""
 
 
 def response(text=MODULE):
@@ -54,8 +89,9 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn('ONLY module 2', calls[-1])
         self.assertEqual(resumed['completed'][0], job['completed'][0])
         accepted = accept_job(restored, resumed)
-        self.assertIn('### Learning activities', accepted['content'])
-        self.assertIn('### Video resources', accepted['content'])
+        self.assertIn('### Activity', accepted['content'])
+        self.assertNotIn('### Video resources', accepted['content'])
+        self.assertIn('### References', accepted['content'])
         self.assertIsNone(accepted['pending'])
 
     def test_changed_source_model_or_endpoint_does_not_resume(self):
@@ -81,15 +117,15 @@ class WorkflowTests(unittest.TestCase):
             with self.subTest(change=change), self.assertRaises(CourseError):
                 validate_pending({**job, **change})
 
-    def test_video_resources_are_deterministic_searches_or_supplied_links(self):
-        syllabus = SAMPLE + '\nhttps://youtu.be/realSourceID\nhttps://[broken\n'
-        text = video_resources(syllabus, 'Lift & drag', 'Flight Theory')
-        self.assertIn('Lift+%26+drag', text)
-        self.assertIn('https://youtu.be/realSourceID', text)
-        bad = MODULE + '\n### Video resources\n[Imaginary](https://youtu.be/inventedID)\n'
+    def test_video_suggestions_removed_and_official_references_appended(self):
+        syllabus = SAMPLE + '\nhttps://youtu.be/realSourceID\n'
+        bad = MODULE + '\n### Video resources\n[Suggestion](https://youtu.be/inventedID)\n'
         job = advance(new_job(syllabus, '', self.config, [0]), self.config, transport=lambda *args: response(bad))
-        self.assertNotIn('inventedID', draft_text(job))
-        self.assertIn('youtube.com/results?search_query=', draft_text(job))
+        text = draft_text(job)
+        self.assertNotIn('youtu.be', text)
+        self.assertNotIn('Video resources', text)
+        self.assertIn('https://www.faa.gov/', text)
+        self.assertIn('### References', text)
 
     def test_missing_sections_and_truncated_output_preserve_checkpoint(self):
         job = new_job(SAMPLE, '', self.config)
@@ -105,8 +141,8 @@ class WorkflowTests(unittest.TestCase):
         text = draft_text(job)
         self.assertIn('## Module 3:', text)
         self.assertNotIn('## Module 1:', text)
-        self.assertIn('### Learning activities', text)
-        self.assertIn('### Video resources', text)
+        self.assertIn('### Activity', text)
+        self.assertNotIn('### Video resources', text)
         self.assertIn('[Add instructor-verified', text)
 
     def test_course_export_keeps_accepted_source_and_excludes_pending(self):

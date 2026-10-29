@@ -10,7 +10,7 @@ import re
 import tempfile
 import zipfile
 
-VERSION = "0.2.0-rc.2"
+VERSION = "0.3.0-rc.1"
 MAX_FILE_BYTES = 8 * 1024 * 1024
 MAX_TEXT = 180_000
 MAX_OUTPUT = 400_000
@@ -239,27 +239,22 @@ def build_course_markdown(syllabus: str, title: str = "") -> str:
     for i, topic in enumerate(plan["topics"], 1):
         subject = topic["title"]
         lines += ["", f"## Module {i}: {subject}", "", f"**Week(s):** {topic['schedule'] or 'Unassigned'}", "",
-                  "### Intended learning outcomes (suggested)",
-                  f"- Explain the central concepts of {subject} using an annotated example.",
-                  f"- Apply {subject} to a relevant case and justify the approach.",
-                  "- Identify a limitation or common error and explain how to address it.", "",
-                  "**Course outcome alignment:** [Select the relevant course outcomes.]", "",
-                  "### Lesson content", "[Add instructor-verified explanations, diagrams, and worked examples.]"]
+                  "### Discussion and presentation", "#### Introduction",
+                  f"Objective: explain and apply {subject}. [Align with the supplied course outcomes.]", "",
+                  "#### Presentation sequence",
+                  f"1. Opening: recall what learners know about {subject} and identify a misconception.",
+                  "2. Explain: [Add instructor-verified explanations, terminology, and diagrams.]",
+                  "3. Discuss: ask learners to justify an application and state its assumptions.",
+                  "4. Practice: compare approaches and correct common errors.", ""]
         lines += [f"- {sub}" for sub in topic["subtopics"]]
-        lines += ["", "### Learning sequence", "1. Recall: ask learners what they already know and check misconceptions.",
-                  f"2. Explain: introduce {subject} using the supplied learning materials.",
-                  "3. Model: work through one example and explain each decision.",
-                  "4. Practice: learners solve a comparable case and compare approaches.",
-                  "5. Reflect: use an exit ticket to identify the concept needing more practice.", "",
-                  "### Activity", f"Analyze a case involving {subject}. Submit a short explanation, evidence, and a justified conclusion.", "",
-                  "### Assessment prompts (instructor review required)",
-                  f"1. Explain one principle of {subject} and illustrate it with an example.",
-                  "2. Apply that principle to a new case. Show the reasoning and assumptions.",
-                  "3. Identify a likely error in the approach and propose a correction.", "",
-                  "**Answer guide:** [Add verified expected answers and acceptable alternatives.]", "",
-                  "**Suggested rubric:** conceptual accuracy 40%; reasoning/evidence 40%; clarity 20%. Confirm against syllabus grading.", "",
-                  "### Resources and accessibility", "[Attach verified reading links and provide text alternatives for diagrams/media.]", "",
-                  "### Summary", "[Write the key takeaways after completing the lesson content.]"]
+        lines += ["", "#### Worked example", "[Add a verified worked example, units, assumptions, and solution.]", "",
+                  "#### Summary", "[Summarize the key ideas and connect them to the next module.]", "",
+                  "### Activity", f"Analyze a case involving {subject}. Submit an annotated explanation and justified conclusion.",
+                  "[Set the steps, deliverable, and appropriate time.]", "", "### Assessment"]
+        for question in range(1, 6):
+            lines += [f"{question}. [Write a multiple-choice question aligned to {subject}.]",
+                      "A. [Option A]", "B. [Option B]", "C. [Option C]", "D. [Option D]", ""]
+        lines += ["### Answer key"] + [f"{question}. [Set the correct letter A–D after verifying the question.]" for question in range(1, 6)]
     lines += ["", "## Supplied references", ""] + ([f"- {r}" for r in plan["references"]] or ["[Add verified references.]"])
     lines += ["", "## Instructor completion checklist", "- Verify facts, examples, answers, references, and outcome alignment.",
               "- Confirm contact hours, week assignments, grading, and assessment load.",
@@ -345,14 +340,57 @@ def atomic_write(path: str | Path, data: bytes):
 
 
 def export_html(title: str, content: str) -> bytes:
-    # Escape every character before embedding. Preview never executes course HTML/scripts.
+    """Safe standalone lesson presentation with collapsible assessments and letter keys."""
+    from lesson_format import presentation_parts
+    from urllib.parse import urlsplit
+
+    def inline(text):
+        chunks, position = [], 0
+        for match in re.finditer(r"\[([^\]]+)\]\((https?://[^\s)]+)\)", text):
+            chunks.append(html.escape(text[position:match.start()]))
+            try:
+                url = urlsplit(match[2])
+                safe = url.scheme in {'http', 'https'} and url.hostname and not url.username and not url.password
+            except ValueError:
+                safe = False
+            chunks.append(f'<a href="{html.escape(match[2], quote=True)}" rel="noopener noreferrer">{html.escape(match[1])}</a>' if safe else html.escape(match[0]))
+            position = match.end()
+        chunks.append(html.escape(text[position:]))
+        return re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", ''.join(chunks))
+
+    def body(text):
+        lines = []
+        for line in text.splitlines():
+            if not line.strip():
+                continue
+            heading = re.match(r'^(#{1,6})\s+(.+)$', line)
+            if heading:
+                level = len(heading[1])
+                if level != 1:
+                    lines.append(f'<h{level}>{inline(heading[2])}</h{level}>')
+            else:
+                lines.append('<p>' + inline(line) + '</p>')
+        return '\n'.join(lines)
+
+    sections = [f'<h1>{html.escape(title)}</h1>']
+    for part in presentation_parts(content):
+        sections.append('<article>')
+        if part['title']:
+            sections.append(body(part['title']))
+        sections.append(body(part['body']))
+        for label, key in [('Assessment', 'assessment'), ('Answer key', 'key'), ('References', 'references')]:
+            if part[key]:
+                sections.append(f'<details><summary>{label}</summary>{body(part[key])}</details>')
+        sections.append('</article>')
     document = f"""<!doctype html><html lang="en"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{html.escape(title)}</title><style>
-body{{font:16px/1.65 system-ui,sans-serif;max-width:960px;margin:40px auto;padding:0 24px;color:#18253b}}
-pre{{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit}}@media print{{body{{margin:0}}}}
-</style><h1>{html.escape(title)}</h1><pre>{html.escape(content)}</pre></html>"""
-    return document.encode("utf-8")
+body{{font:16px/1.65 system-ui,sans-serif;max-width:960px;margin:32px auto;padding:0 24px;color:#102640;background:#fff}}
+article{{margin:20px 0 36px}}h2{{border-bottom:2px solid #e6b844;padding-bottom:8px}}h3{{margin-top:24px}}
+p{{white-space:pre-wrap;overflow-wrap:anywhere;margin:7px 0}}details{{border:1px solid #e4e9f0;border-radius:6px;padding:12px 16px;margin:12px 0}}
+summary{{cursor:pointer;font-weight:600}}a{{color:#203d65}}@media print{{body{{margin:0}}details{{break-inside:avoid}}}}
+</style>{''.join(sections)}</html>"""
+    return document.encode('utf-8')
 
 
 def export_bundle(project: dict) -> bytes:
@@ -364,5 +402,5 @@ def export_bundle(project: dict) -> bytes:
         archive.writestr("course.html", export_html(project["title"], project["content"]))
         archive.writestr("project.json", project_bytes(project))
         archive.writestr("syllabus.txt", project["syllabus"])
-        archive.writestr("README.txt", "Edit project.json with Course Framework. HTML is a safe, printable text view of the Markdown source.\nReview all content and answer keys before teaching. API credentials are not included.\n")
+        archive.writestr("README.txt", "Edit project.json with Course Framework. HTML is a safe lesson presentation with collapsible assessments, answer keys, and references.\nReview all content and answer keys before teaching. API credentials are not included.\n")
     return target.getvalue()

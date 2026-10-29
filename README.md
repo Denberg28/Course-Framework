@@ -1,6 +1,6 @@
 # Course Framework
 
-Paste a syllabus, choose an agent model, and generate modules with lesson content, learning activities, assessments, and video resources. The Windows and Streamlit editions share the same generation and project format, with a compact Aero Academy white/navy/gold design.
+Paste a syllabus, choose an agent model, and generate modules with presentation/discussion, a practical activity, and a five-question assessment. The Windows and Streamlit editions share the same generation and project format, with a compact Aero Academy white/navy/gold design.
 
 ## Use it
 
@@ -8,13 +8,19 @@ Paste a syllabus, choose an agent model, and generate modules with lesson conten
 2. **Choose an agent model** and enter its API key if not configured in Streamlit Secrets. Gemini presets are `gemini-3.8-flash` and `gemini-3.5-flash-lite`; select/type a custom model ID when needed. Availability and quotas depend on your provider account.
 3. Select **all modules** or **one module**, allow sending the syllabus to the agent, then **Generate**. Each selected module uses one request; there is no automatic paid retry.
 4. **Review → Use draft.** Accepted material stays intact until you accept a complete draft. Edit the accepted course if needed.
-5. **Save project** to keep the syllabus, accepted edits, and unfinished modules. **Export course** produces a ZIP with Markdown, a printable HTML text view, the source syllabus, and a reopenable project.
+5. **Save project** to keep the syllabus, accepted edits, and unfinished modules. **Export course** produces a ZIP with Markdown, a collapsible HTML lesson presentation, the source syllabus, and a reopenable project.
 
 If a request fails, completed modules remain in the pending draft. With the same syllabus, title, module selection, provider, model, and endpoint, **Generate/Resume** continues from the next unfinished module. Reopen a saved project, re-enter the session key, and configure the original compatible endpoint if applicable. Changing the engine or syllabus starts a new draft; previously accepted content remains safe. Streamlit work is session-local until downloaded; Windows work is held in memory until saved. Save before closing or reloading.
 
 A Windows **Pause** finishes and retains the current module, then stops before the next request. It does not cancel provider processing or billing. In Streamlit, a provider failure stops the sequence and exposes Resume; generation otherwise runs through the selected modules. Do not start overlapping browser requests or tabs expecting shared persistence.
 
-Each AI module is checked for nonempty **Learning objectives**, **Lesson content**, **Learning activities**, and **Assessment** sections. This validates structure, not factual accuracy, activity quality, or syllabus coverage. Video resources include topic-based YouTube search links and supplied YouTube/Vimeo links. The app does not discover, watch, rank, or verify specific videos; review relevance, accuracy, captions, and availability before teaching. Offline mode produces labeled scaffolding and placeholders, not researched lesson content.
+Each new module follows **Discussion and presentation → Activity → Assessment → Answer key → References**. Discussion contains an introduction, 3–5 teaching/discussion segments, a worked example, and a summary. The activity includes steps, a deliverable, and suggested time. Assessment contains exactly five multiple-choice questions numbered 1–5, each with A–D options; the key contains five numbered letters such as `1. B`. Streamlit collapses assessment, answer key, and references separately. Windows **Preview** opens a standalone HTML presentation with the same collapsible sections; the native editor remains Markdown.
+
+Video suggestions and links are removed from new module creation. Topic-scoped references come from a catalog of checked official FAA, CAAP and EASA locations plus relevant MIT/OpenStax publisher/university sources. Source locations were checked on 29 October 2026. This validates source authenticity/location, not AI-generated facts, answers, regulatory applicability, or the current text of a rule. Catalog entries are metadata rather than retrieved textbook text. Check the applicable document, chapter, revision, jurisdiction, and institutional syllabus before teaching. Unrelated subjects fall back to the syllabus-supplied readings rather than forced aviation references.
+
+Output validation checks the presentation subsections, discussion length, the five A–D question structures, and the five-letter answer key. This is structural validation, not pedagogical or factual approval. Offline mode produces explicit placeholders, including questions and answer letters that an instructor must complete; it never invents a correct answer.
+
+Generation still uses one sequential AI request per module. The previous original AI app made one shorter Flash-Lite request for the whole course, so removing locally generated video suggestions alone does not eliminate that latency difference. This release asks for compact, focused module content but does not claim a measured live-provider speed improvement.
 
 ## Windows
 
@@ -57,7 +63,7 @@ For the Windows app, install `requirements-desktop.txt` and run `desktop.py`. Tk
 
 ```powershell
 py -3.12 -m unittest discover -s tests -v
-py -3.12 -m compileall -q app.py desktop.py academy_theme.py course_core.py engines.py course_workflow.py hosted_keys.py tests tools
+py -3.12 -m compileall -q app.py desktop.py academy_theme.py course_core.py engines.py course_workflow.py hosted_keys.py lesson_format.py reference_catalog.py tests tools
 py -3.12 desktop.py --smoke-test
 py -3.12 -m pip install -r requirements-build.txt
 py -3.12 -m PyInstaller --noconfirm --clean --windowed --onedir --name CourseFramework desktop.py
@@ -70,3 +76,5 @@ Input limits: 8 MB per file, 100 PDF pages, 180,000 source characters, 80 detect
 New saves use **project format 2**, including a pending-draft checkpoint and selected model metadata. Format 1 projects open without losing accepted material. Older app versions cannot open format 2; keep Markdown exports if reverting. API keys and endpoints are never serialized. Export packages contain accepted material only; Save project keeps unfinished work. Schema migration does not introduce an Aero Academy account or publication integration.
 
 See [testing](docs/TESTING.md), [architecture](docs/ARCHITECTURE.md), [UI alignment](docs/UI_ALIGNMENT.md), and [known issues](docs/KNOWN_ISSUES.md). Roll back via a focused revert after preserving project and Markdown exports.
+
+The new lesson contract has a different generation fingerprint. Completed/accepted older projects remain readable; older unfinished drafts are preserved in the project but require a fresh draft to use the new presentation/MCQ format.

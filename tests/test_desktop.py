@@ -45,7 +45,8 @@ class DesktopTests(unittest.TestCase):
         self.wait_worker()
         self.assertEqual(self.app.text(self.app.editor), '')
         self.assertEqual(len(self.app.job['completed']), 5)
-        self.assertIn('### Video resources', self.app.text(self.app.candidate))
+        self.assertNotIn('### Video resources', self.app.text(self.app.candidate))
+        self.assertIn('### Discussion and presentation', self.app.text(self.app.candidate))
         self.app.apply_draft()
         self.root.update()
         self.assertIn('## Module 5:', self.app.text(self.app.editor))
@@ -119,6 +120,20 @@ class DesktopTests(unittest.TestCase):
                                  self.root.winfo_rootx() + self.root.winfo_width())
             self.assertLessEqual(widget.winfo_rooty() + widget.winfo_height(),
                                  self.root.winfo_rooty() + self.root.winfo_height())
+
+    def test_presentation_preview_has_collapsible_assessment(self):
+        self.local_sample()
+        self.app.scope.set('1. Airframe components and load paths')
+        self.app.start()
+        self.wait_worker()
+        with patch('desktop.webbrowser.open') as browser:
+            self.app.preview()
+            self.assertTrue(browser.call_args.args[0].startswith('file:'))
+        data = (Path(self.app.preview_dir.name) / 'course.html').read_text()
+        self.assertIn('<details><summary>Assessment', data)
+        self.assertIn('<details><summary>Answer key', data)
+        self.app.preview_dir.cleanup()
+        self.app.preview_dir = None
 
     def test_settings_do_not_displace_primary_controls(self):
         self.root.geometry('940x620')

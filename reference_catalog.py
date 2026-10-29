@@ -55,3 +55,12 @@ def reference_section(syllabus, topic):
         lines.append('Use and verify the references supplied in the syllabus for this topic.')
     lines += ['', f'Official/publisher source locations checked {CHECKED}. Check the relevant text and current revision before teaching; generated claims and answers are not independently verified.']
     return '\n'.join(lines)
+
+
+def restrict_generated_reference_links(text):
+    """Model-authored links must match a reviewed catalog location exactly."""
+    allowed = {ref['url'] for ref in CATALOG}
+    text = re.sub(r'\[([^\]]+)\]\((https?://[^\s)]+)\)',
+                  lambda m: m[0] if m[2] in allowed else m[1] + ' [source link needs verification]', text)
+    return re.sub(r'https?://[^\s<>"\)]+',
+                  lambda m: m[0] if m[0] in allowed else '[source link needs verification]', text)

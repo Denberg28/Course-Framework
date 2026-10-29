@@ -11,3 +11,5 @@ Source locations checked on **29 October 2026**, using the official agency/unive
 | OpenStax University Physics Vol. 1 — Stress, Strain, and Elastic Modulus | https://openstax.org/books/university-physics-volume-1/pages/12-3-stress-strain-and-elastic-modulus | University-level introductory elasticity/stress/strain reference. |
 
 Selection is topic/context based. The app does not force aviation references into unrelated courses. Users should retain institution-approved textbooks/readings in the syllabus. Models are instructed not to invent page/section numbers, exact regulatory thresholds, or agency approval claims. Generated explanations, MCQs and answer letters are not independently validated by this catalog; instructors must check them against the actual source text and current applicability. No video suggestion feature remains in new module generation.
+
+New model-authored hyperlinks are restricted to reviewed catalog locations; uncatalogued generated URLs are replaced with a verification marker. The raw syllabus/project keeps user-supplied readings unchanged. This URL filter does not validate a factual claim or a named reference/page number.

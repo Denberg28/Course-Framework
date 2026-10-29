@@ -38,6 +38,15 @@ class LessonFormatTests(unittest.TestCase):
         self.assertIn('&lt;course&gt;', page)
         self.assertIn('<h4>Presentation sequence</h4>', page)
 
+    def test_model_invented_reference_url_is_not_published(self):
+        cfg = EngineConfig('Google AI Studio (Gemini)', 'fake-key')
+        fake = MODULE.replace('#### Summary', '[Invented citation](https://fabricated.example/faa-rule)\n#### Summary')
+        job = advance(new_job(SAMPLE, '', cfg, [0]), cfg, transport=lambda *a: response(fake))
+        text = draft_text(job)
+        self.assertNotIn('fabricated.example', text)
+        self.assertIn('source link needs verification', text)
+        self.assertIn('https://www.faa.gov/', text)
+
     def test_reference_selection_is_topic_scoped_and_not_regulatory_approval(self):
         refs = select_references('Course Name: Aviation regulation, FAA, CAAP and EASA', 'Certification')
         ids = {r['id'] for r in refs}

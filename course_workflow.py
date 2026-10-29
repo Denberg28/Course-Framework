@@ -7,7 +7,7 @@ import re
 from course_core import (CourseError, MAX_OUTPUT, analyze_syllabus, bounded_text,
                          make_project, validate_pending)
 from engines import EngineConfig, generate_course
-from reference_catalog import reference_section
+from reference_catalog import reference_section, restrict_generated_reference_links
 from lesson_format import validate_lesson
 
 GEMINI_MODELS = ('gemini-3.8-flash', 'gemini-3.5-flash-lite')
@@ -81,7 +81,7 @@ def advance(job, config, *, transport=None):
     index = job['indices'][len(job['completed'])]
     topic = analyze_syllabus(job['syllabus'])['topics'][index]
     text = generate_course(job['syllabus'], job['title'], config, module_index=index, transport=transport)
-    text = remove_video_sections(text)
+    text = restrict_generated_reference_links(remove_video_sections(text))
     text = re.sub(r'(?ims)^###\s+References\s*\n.*?(?=^#{1,3}\s|\Z)', '', text)
     text = re.sub(r'(?m)^#{1,2} .+\n?', '', text)
     text = re.sub(r'(?im)^\*\*Week\(s\):\*\*[^\n]*(?:\n|$)', '', text).strip()

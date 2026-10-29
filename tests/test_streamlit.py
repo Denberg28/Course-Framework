@@ -40,10 +40,12 @@ class StreamlitTests(unittest.TestCase):
         with patch('engines.request_json', return_value=response()):
             self.click('Generate')
         labels = [e.label for e in self.app.expander]
-        self.assertIn('Assessment · 5 questions', labels)
+        self.assertIn('Assessment', labels)
         self.assertIn('Answer key', labels)
+        assessment = next(e for e in self.app.expander if e.label == 'Assessment')
+        self.assertIn('A. The applied load  \nB.', assessment.markdown[0].value)
         for expander in self.app.expander:
-            if expander.label in {'Assessment · 5 questions', 'Answer key'}:
+            if expander.label in {'Assessment', 'Answer key'}:
                 self.assertFalse(expander.proto.expanded)
 
     def test_model_selector_custom_and_provider_change_clear_credentials(self):

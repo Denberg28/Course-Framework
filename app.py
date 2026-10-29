@@ -142,8 +142,8 @@ def render_course(text):
             st.markdown(part['title'])
         st.markdown(part['body'], unsafe_allow_html=False)
         if part['assessment']:
-            with st.expander('Assessment · 5 questions', expanded=False):
-                st.markdown(part['assessment'], unsafe_allow_html=False)
+            with st.expander('Assessment', expanded=False):
+                st.markdown(part['assessment'].replace('\n', '  \n'), unsafe_allow_html=False)
         if part['key']:
             with st.expander('Answer key', expanded=False):
                 st.markdown(part['key'], unsafe_allow_html=False)

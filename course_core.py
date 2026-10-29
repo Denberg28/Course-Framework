@@ -378,7 +378,7 @@ def export_html(title: str, content: str) -> bytes:
         if part['title']:
             sections.append(body(part['title']))
         sections.append(body(part['body']))
-        for label, key in [('Assessment — 5 questions', 'assessment'), ('Answer key', 'key'), ('References', 'references')]:
+        for label, key in [('Assessment', 'assessment'), ('Answer key', 'key'), ('References', 'references')]:
             if part[key]:
                 sections.append(f'<details><summary>{label}</summary>{body(part[key])}</details>')
         sections.append('</article>')

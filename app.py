@@ -1,11 +1,13 @@
 """Optional Streamlit interface to the same Windows course authoring core."""
 import streamlit as st
+from academy_theme import streamlit_css
 
 from course_core import (CourseError, SAMPLE, VERSION, analyze_syllabus, build_course_markdown,
                          export_bundle, extract_text, load_project, make_project, project_bytes)
 from engines import EngineConfig, PROVIDERS, generate_course
 
 st.set_page_config(page_title="Course Framework", page_icon="📘", layout="wide")
+st.markdown(streamlit_css(), unsafe_allow_html=True)
 for key, default in {"source": "", "course_title": "", "content": "", "engine_used": "Local template",
                      "candidate": "", "candidate_source": "", "candidate_title": "",
                      "candidate_engine": "Local template", "notice": "", "notice_error": False}.items():
@@ -85,7 +87,7 @@ def revise():
 
 st.title("Course Framework")
 st.caption(f"Syllabus → course draft → instructor review · {VERSION}")
-st.info("Work is kept in this browser session. Download a project to retain it across browser reloads or server restarts.")
+st.caption("Session workspace · Save a project to retain it after browser reloads or server restarts.")
 if st.session_state.notice:
     (st.error if st.session_state.notice_error else st.success)(st.session_state.notice)
 

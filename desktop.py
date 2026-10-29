@@ -13,6 +13,7 @@ from course_core import (CourseError, SAMPLE, VERSION, analyze_syllabus, atomic_
                          export_bundle, export_html, extract_text, load_project,
                          make_project, project_bytes, read_file)
 from engines import EngineConfig, PROVIDERS, generate_course
+from academy_theme import FIELD, INK, LINE, MUTED, PAPER, WARM, apply_desktop_theme
 
 
 class CourseMaker:
@@ -32,42 +33,54 @@ class CourseMaker:
         root.title(f"Course Framework {VERSION}")
         root.geometry("1160x790")
         root.minsize(940, 620)
-        root.configure(bg="#f3f5f9")
-        style = ttk.Style(root)
-        style.theme_use("clam")
-        style.configure(".", font=("Segoe UI", 10), background="#f3f5f9", foreground="#172b49")
-        style.configure("TButton", padding=(12, 7))
-        style.configure("TNotebook.Tab", padding=(18, 10))
-        style.configure("Title.TLabel", font=("Segoe UI", 21, "bold"))
-        style.configure("Accent.TButton", background="#203d65", foreground="white")
-        shell = ttk.Frame(root, padding=20)
-        shell.pack(fill="both", expand=True)
-        header = ttk.Frame(shell)
+        self.style = apply_desktop_theme(root)
+        header = ttk.Frame(root, padding=(18, 12))
         header.pack(fill="x")
         ttk.Label(header, text="Course Framework", style="Title.TLabel").pack(side="left")
-        ttk.Label(header, text="Syllabus → teachable course draft").pack(side="right")
-        toolbar = ttk.Frame(shell, padding=(0, 16, 0, 12))
-        toolbar.pack(fill="x")
-        for label, action in (("New", self.new), ("Open project", self.open_project),
-                              ("Save project", self.save), ("Save as…", lambda: self.save(True)),
+        toolbar = ttk.Frame(header)
+        toolbar.pack(side="right")
+        for label, action in (("New", self.new), ("Open", self.open_project),
+                              ("Save", self.save), ("Save as…", lambda: self.save(True)),
                               ("Export…", self.export)):
-            ttk.Button(toolbar, text=label, command=action).pack(side="left", padx=(0, 6))
-        ttk.Button(toolbar, text="Engine settings", command=lambda: self.tabs.select(self.settings_tab)).pack(side="right")
-        title_row = ttk.Frame(shell)
-        title_row.pack(fill="x", pady=(0, 12))
-        ttk.Label(title_row, text="Course title", width=13).pack(side="left")
+            ttk.Button(toolbar, text=label, command=action).pack(side="left", padx=(4, 0))
+        ttk.Separator(root).pack(fill="x")
+        shell = ttk.Frame(root)
+        shell.pack(fill="both", expand=True)
+        rail = ttk.Frame(shell, style="Rail.TFrame", padding=(12, 18), width=196)
+        rail.pack(side="left", fill="y")
+        rail.pack_propagate(False)
+        ttk.Label(rail, text="COURSE MAKER", style="Brand.TLabel").pack(anchor="w", padx=12)
+        ttk.Label(rail, text="Authoring workspace", style="Rail.TLabel").pack(anchor="w", padx=12, pady=(3, 18))
+        ttk.Separator(shell, orient="vertical").pack(side="left", fill="y")
+        workspace = ttk.Frame(shell, padding=(18, 14))
+        workspace.pack(side="left", fill="both", expand=True)
+        title_row = ttk.Frame(workspace)
+        title_row.pack(fill="x", pady=(0, 14))
+        ttk.Label(title_row, text="Course title", style="Muted.TLabel").pack(side="left", padx=(0, 12))
         self.title = tk.StringVar()
         ttk.Entry(title_row, textvariable=self.title).pack(side="left", fill="x", expand=True)
         self.title.trace_add("write", lambda *_: self.mark_dirty())
-        self.tabs = ttk.Notebook(shell)
+        self.tabs = ttk.Notebook(workspace, style="Workspace.TNotebook")
         self.tabs.pack(fill="both", expand=True)
-        self.source_tab = ttk.Frame(self.tabs, padding=12)
-        self.editor_tab = ttk.Frame(self.tabs, padding=12)
-        self.draft_tab = ttk.Frame(self.tabs, padding=12)
-        self.settings_tab = ttk.Frame(self.tabs, padding=20)
-        for label, tab in (("1  Syllabus", self.source_tab), ("2  Course editor", self.editor_tab),
-                           ("3  Generated draft", self.draft_tab), ("Engine", self.settings_tab)):
+        self.source_tab = ttk.Frame(self.tabs)
+        self.editor_tab = ttk.Frame(self.tabs)
+        self.draft_tab = ttk.Frame(self.tabs)
+        self.settings_tab = ttk.Frame(self.tabs)
+        self.navigation = tk.StringVar(value="0")
+        self.nav_buttons = []
+        for index, (label, tab) in enumerate((("1   Syllabus", self.source_tab),
+                                             ("2   Review draft", self.draft_tab),
+                                             ("3   Course editor", self.editor_tab),
+                                             ("Engine settings", self.settings_tab))):
             self.tabs.add(tab, text=label)
+            button = ttk.Radiobutton(rail, text=label, variable=self.navigation, value=str(index),
+                                     style="Nav.TRadiobutton", command=lambda page=tab: self.tabs.select(page))
+            button.pack(fill="x", pady=(0, 4))
+            self.nav_buttons.append(button)
+            root.bind(f"<Alt-Key-{index + 1}>", lambda event, page=tab: self.tabs.select(page))
+        self.tabs.bind("<<NotebookTabChanged>>", self.sync_navigation)
+        ttk.Label(rail, text=f"{VERSION}\nSyllabus → draft → course", style="Rail.TLabel",
+                  justify="left").pack(side="bottom", anchor="w", padx=12)
         bar = ttk.Frame(self.source_tab)
         bar.pack(fill="x", pady=(0, 10))
         ttk.Button(bar, text="Import syllabus…", command=self.import_syllabus).pack(side="left", padx=(0, 6))
@@ -75,14 +88,17 @@ class CourseMaker:
         ttk.Button(bar, text="Review outline", command=self.review).pack(side="right")
         panes = ttk.Panedwindow(self.source_tab, orient="horizontal")
         panes.pack(fill="both", expand=True)
-        left, right = ttk.Frame(panes), ttk.Frame(panes)
+        left, right = ttk.Frame(panes, padding=(0, 0, 10, 0)), ttk.Frame(panes, padding=(10, 0, 0, 0))
         panes.add(left, weight=3)
         panes.add(right, weight=2)
-        ttk.Label(left, text="Paste or import TXT, MD, DOCX, or a text-based PDF").pack(anchor="w", pady=(0, 6))
+        ttk.Label(left, text="Syllabus", style="Section.TLabel").pack(anchor="w", pady=(0, 6))
+        self.wrapped_label(left, "Paste text or import TXT, MD, DOCX, or a text-based PDF.")
         self.source = self.textbox(left)
-        ttk.Label(right, text="Detected course structure · review before generating").pack(anchor="w", padx=(12, 0), pady=(0, 6))
+        ttk.Label(right, text="Detected outline", style="Section.TLabel").pack(anchor="w", pady=(0, 6))
+        self.wrapped_label(right, "Review topics and weeks before generating.")
         self.outline = self.textbox(right, editable=False)
-        ttk.Label(self.editor_tab, text="Edit your accepted course in Markdown. Save the project to retain both source and draft.").pack(anchor="w", pady=(0, 8))
+        ttk.Label(self.editor_tab, text="Course editor", style="Section.TLabel").pack(anchor="w", pady=(0, 6))
+        self.wrapped_label(self.editor_tab, "Edit your accepted course in Markdown. Save to retain the syllabus and course.")
         self.editor = self.textbox(self.editor_tab)
         revision = ttk.Frame(self.editor_tab)
         revision.pack(fill="x", pady=(10, 0))
@@ -90,18 +106,22 @@ class CourseMaker:
         ttk.Entry(revision, textvariable=self.instructions).pack(side="left", fill="x", expand=True, padx=(0, 8))
         self.revise_button = ttk.Button(revision, text="Revise with engine", command=lambda: self.start(True))
         self.revise_button.pack(side="right")
-        ttk.Label(self.editor_tab, text="Revision instructions, e.g. Add a worked example to module 2 and preserve the other modules.").pack(anchor="w", pady=(6, 0))
+        self.wrapped_label(self.editor_tab, "Revision instructions, e.g. Add a worked example to module 2 and preserve the other modules.")
         draft_bar = ttk.Frame(self.draft_tab)
         draft_bar.pack(fill="x", pady=(0, 10))
-        ttk.Label(draft_bar, text="Review the generated draft. Your accepted course stays unchanged until you use it.").pack(side="left")
-        self.apply_button = ttk.Button(draft_bar, text="Use this draft", command=self.apply_draft, state="disabled")
+        ttk.Label(draft_bar, text="Review draft", style="Section.TLabel").pack(side="left")
+        self.apply_button = ttk.Button(draft_bar, text="Use this draft", style="Accent.TButton", command=self.apply_draft, state="disabled")
         self.apply_button.pack(side="right")
+        self.wrapped_label(self.draft_tab, "Review before accepting. Use this draft replaces the accepted course after confirmation.")
         self.candidate = self.textbox(self.draft_tab)
         self.setup_engine()
-        footer = ttk.Frame(shell, padding=(0, 12, 0, 0))
+        ttk.Separator(root).pack(fill="x")
+        footer = ttk.Frame(root, padding=(18, 10))
         footer.pack(fill="x")
         self.status = tk.StringVar(value="Ready · Local template mode · No API key required")
-        ttk.Label(footer, textvariable=self.status, wraplength=700).pack(side="left", fill="x", expand=True)
+        status_label = ttk.Label(footer, textvariable=self.status, style="Muted.TLabel")
+        status_label.pack(side="left", fill="x", expand=True, padx=(0, 12))
+        status_label.bind("<Configure>", lambda event: status_label.configure(wraplength=max(140, event.width)))
         self.cancel_button = ttk.Button(footer, text="Discard pending result", command=self.cancel, state="disabled")
         self.cancel_button.pack(side="right", padx=(6, 0))
         self.generate_button = ttk.Button(footer, text="Generate course", style="Accent.TButton", command=self.start)
@@ -111,9 +131,22 @@ class CourseMaker:
         root.protocol("WM_DELETE_WINDOW", self.close)
         root.after(150, self.poll)
 
+    def sync_navigation(self, event=None):
+        self.navigation.set(str(self.tabs.index(self.tabs.select())))
+
+    @staticmethod
+    def wrapped_label(parent, text):
+        label = ttk.Label(parent, text=text, style="Muted.TLabel", justify="left", wraplength=300)
+        label.pack(fill="x", pady=(0, 8))
+        label.bind("<Configure>", lambda event: label.configure(wraplength=max(100, event.width)))
+        return label
+
     def textbox(self, parent, editable=True):
-        box = ScrolledText(parent, wrap="word", undo=True, font=("Segoe UI", 11),
-                           background="white", foreground="#172b49", relief="flat", padx=12, pady=10)
+        box = ScrolledText(parent, wrap="word", undo=True, font=("Segoe UI", 10), width=1, height=1,
+                           background=PAPER if editable else FIELD, foreground=INK,
+                           insertbackground=INK, selectbackground=WARM, selectforeground=INK,
+                           relief="flat", borderwidth=0, highlightthickness=1,
+                           highlightbackground=LINE, highlightcolor=INK, padx=12, pady=10)
         box.pack(fill="both", expand=True)
         if editable:
             box.bind("<<Modified>>", lambda e: self.changed(box))
@@ -146,7 +179,11 @@ class CourseMaker:
         box.configure(state=state)
 
     def setup_engine(self):
-        form = self.settings_tab
+        heading = ttk.Label(self.settings_tab, text="Engine settings", style="Section.TLabel")
+        heading.pack(anchor="w", pady=(0, 6))
+        self.wrapped_label(self.settings_tab, "Choose the engine used to generate and revise course drafts.")
+        form = ttk.Frame(self.settings_tab)
+        form.pack(fill="x")
         form.columnconfigure(1, weight=1)
         self.provider = tk.StringVar(value=PROVIDERS[0])
         self.model = tk.StringVar(value="gemini-2.5-flash-lite")
@@ -157,18 +194,21 @@ class CourseMaker:
                   ("Model ID", ttk.Entry(form, textvariable=self.model)),
                   ("API base URL", ttk.Entry(form, textvariable=self.endpoint))]
         for row, (label, widget) in enumerate(fields):
-            ttk.Label(form, text=label).grid(row=row, column=0, sticky="w", padx=(0, 20), pady=9)
-            widget.grid(row=row, column=1, sticky="ew", pady=9)
+            ttk.Label(form, text=label).grid(row=row, column=0, sticky="w", padx=(0, 20), pady=6)
+            widget.grid(row=row, column=1, sticky="ew", pady=6)
         ttk.Button(form, text="Clear key", command=lambda: self.key.set("")).grid(row=4, column=1, sticky="w", pady=8)
-        ttk.Label(form, justify="left", wraplength=740, text=(
-            "Google AI Studio: paste a Gemini API key and an available Gemini model ID. The Google endpoint is fixed.\n\n"
-            "OpenAI-compatible: enter the provider's API key, model ID, and base URL ending in /v1 if required by that provider. "
-            "The app uses Chat Completions. A key alone cannot identify a provider or support every API format.\n\n"
-            "Local engines: select OpenAI-compatible and use a localhost base URL. A key may be omitted for a local server.\n\n"
-            "Keys stay in this session and are never written to projects. Online generation sends your syllabus and, for revision, "
-            "your draft to the selected engine. Provider charges and quotas may apply.\n\n"
-            "AI output is an editable draft. Review facts, answer keys, coverage, and references before use."
-        )).grid(row=5, column=0, columnspan=2, sticky="nw", pady=15)
+        ttk.Button(form, text="Provider guide…", command=self.provider_guide).grid(row=4, column=1, sticky="e", pady=8)
+        self.wrapped_label(self.settings_tab,
+            "Keys stay in this session and are excluded from saved projects. Online generation sends your syllabus "
+            "and, for revisions, your course to the selected provider. Charges and quotas may apply.")
+        self.wrapped_label(self.settings_tab, "Review generated facts, answers, coverage, and references before use.")
+
+    def provider_guide(self):
+        messagebox.showinfo("Provider guide",
+            "Google AI Studio: enter a Gemini key and available model ID. The Google endpoint is fixed.\n\n"
+            "OpenAI-compatible: enter a key, model ID, and Chat Completions base URL. "
+            "A key alone cannot identify a provider or support every API format.\n\n"
+            "For a local server, use its localhost URL; a key may be omitted.", parent=self.root)
 
     def project(self):
         return make_project(self.text(self.source), self.title.get(), self.text(self.editor), self.engine_used)

@@ -8,6 +8,10 @@ Download the Windows x64 ZIP from [GitHub Releases](https://github.com/Denberg28
 
 The application is unsigned. This project does not claim publisher verification or stable readiness.
 
+## Interface
+
+The desktop follows Aero Academy’s minimal white/navy/gold design: left workspace navigation, compact type, and a top file-action bar. Use **Syllabus → Review draft → Course editor**; Engine settings stays in the left rail. Alt+1/2/3/4 switches those pages; Ctrl+O opens a project and Ctrl+S saves. [UI alignment](docs/UI_ALIGNMENT.md) records the shared tokens and integration boundary. Academy account/content integration is a future step.
+
 ## Workflow
 
 1. **Syllabus:** paste text or import `.txt`, `.md`, `.docx`, or a text-based `.pdf`. Load the built-in aircraft structures example to try the workflow.

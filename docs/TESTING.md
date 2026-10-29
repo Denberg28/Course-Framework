@@ -1,12 +1,12 @@
 # Verification and release gates
 
-Target version: **0.1.0-rc.1**. Baseline: `66f3d9f5f3f43c17d488a281cce34e206cb93c91`. Evidence tier: self-reviewed, automated behavior/integration tests; simulated provider responses. Final build/commit/run evidence is attached to GitHub Actions and the release. This document does not claim live-provider or manual desktop validation.
+Target version: **0.1.0-rc.2**. UI baseline: `2f12c31`. Evidence tier: self-reviewed, automated behavior/integration tests; simulated provider responses. Final build/commit/run evidence is attached to GitHub Actions and the release. This document does not claim live-provider or manual desktop validation.
 
 ## Acceptance criteria and required automated checks
 
 | Gate | Acceptance/check | Expected result |
 |---|---|---|
-| A — source/build | `python -m compileall -q app.py desktop.py course_core.py engines.py tests`; `git diff --check` | No syntax or whitespace errors |
+| A — source/build | `python -m compileall -q app.py desktop.py academy_theme.py course_core.py engines.py tests tools`; `git diff --check` | No syntax or whitespace errors |
 | B — course behavior | `python -m unittest discover -s tests -v` | Metadata/outcomes/references excluded from modules; sample yields five modules and preserves weeks 3–4; bounded files and project schemas reject invalid input |
 | C — regression/persistence | Core, native, and Streamlit tests | Accepted course and exports survive reruns; project roundtrip preserves material; replacement failure retains old file; candidates require acceptance |
 | D — adapters | Provider tests and native worker tests | Correct Gemini/compatible payloads; no keys in URL/project/repr; sanitized errors; no redirect forwarding; incomplete/oversized output rejected; failures/discarded results preserve material |
@@ -27,3 +27,11 @@ Local Linux validation skips display-dependent desktop tests if no display is av
 ## Candidate policy
 
 Publish only after automated Linux/Windows tests and packaged smoke test pass. Keep the release a prerelease until live-provider behavior and manual desktop usability are documented as PASS. Failed required automated gates block candidate publication. Do not relabel a candidate as stable on the strength of a build or startup check alone.
+
+## UI alignment checks for rc.2
+
+The native suite checks left navigation, programmatic draft/acceptance transitions, and editor/action bounds at 940×620. Windows CI also captures the real syllabus/editor/settings UI in `CourseFramework-UI-review`. Local headless Linux can run core/adapter/Streamlit checks but skips native Tk checks unless an X display is available. Final Windows test/build evidence is attached to the rc.2 workflow; manual high-DPI/side-by-side Academy acceptance and live providers remain pending.
+
+### Local validation — 29 October 2026
+
+Python 3.12.14: all **29 tests passed**, including six native Tk tests on an Xvfb Linux display. Source smoke test passed. Syllabus/editor/minimum-size settings screenshots were captured from the actual Tk widgets and visually reviewed; the Linux font fallback does not establish Windows Segoe UI parity. Compile/whitespace checks passed. Windows CI/package and high-DPI/live-provider validation remain pending. Publication was explicitly authorized in the follow-up. Windows CI and packaged executable gates must pass before the rc.2 candidate is published.

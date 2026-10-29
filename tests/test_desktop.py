@@ -17,7 +17,43 @@ class DesktopTests(unittest.TestCase):
         self.root.update()
 
     def tearDown(self):
+        for timer in self.root.tk.call("after", "info"):
+            self.root.after_cancel(timer)
         self.root.destroy()
+
+    def test_sidebar_and_programmatic_navigation_stay_in_sync(self):
+        for index, page in enumerate((self.app.source_tab, self.app.draft_tab,
+                                      self.app.editor_tab, self.app.settings_tab)):
+            self.app.nav_buttons[index].invoke()
+            self.root.update()
+            self.assertEqual(self.app.tabs.select(), str(page))
+        self.app.replace(self.app.source, SAMPLE)
+        self.app.title.set('Structures')
+        self.app.results.put((True, '# Course', 'Local template', SAMPLE, 'Structures'))
+        self.app.poll()
+        self.root.update()
+        self.assertEqual(self.app.navigation.get(), '1')
+        self.app.apply_draft()
+        self.root.update()
+        self.assertEqual(self.app.navigation.get(), '2')
+        self.assertIn('# Course', self.app.text(self.app.editor))
+
+    def test_minimum_window_keeps_editing_and_actions_visible(self):
+        self.root.geometry('940x620')
+        for page, controls in ((self.app.source_tab, (self.app.source, self.app.outline)),
+                               (self.app.editor_tab, (self.app.editor, self.app.revise_button)),
+                               (self.app.draft_tab, (self.app.candidate, self.app.apply_button)),
+                               (self.app.settings_tab, ())):
+            self.app.tabs.select(page)
+            self.root.update()
+            for widget in (*controls, self.app.generate_button, self.app.cancel_button):
+                self.assertTrue(widget.winfo_viewable())
+                self.assertGreater(widget.winfo_height(), 20)
+                self.assertGreaterEqual(widget.winfo_rootx(), self.root.winfo_rootx())
+                self.assertLessEqual(widget.winfo_rootx() + widget.winfo_width(),
+                                     self.root.winfo_rootx() + self.root.winfo_width())
+                self.assertLessEqual(widget.winfo_rooty() + widget.winfo_height(),
+                                     self.root.winfo_rooty() + self.root.winfo_height())
 
     def test_editor_save_and_reopen_exclude_api_key(self):
         self.app.set_project(make_project(SAMPLE, 'Structures', build_course_markdown(SAMPLE)))

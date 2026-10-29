@@ -1,5 +1,6 @@
 # Known issues and validation limits
 
+- **Academy alignment:** visual tokens are based on the current Academy source; real Windows side-by-side comparison, high-DPI, and screen-reader acceptance remain pending. No Academy account/content integration is implemented.
 - **Live providers not tested:** no user key is available. API shapes, auth placement, refusal/truncation handling, and failures are covered with deterministic simulated responses. Account/model access and teaching quality still require a user-run check.
 - **Candidate release:** Windows automated UI and packaged-executable checks run in GitHub Actions. Manual Windows 10/11 use, high-DPI layout, keyboard/screen-reader accessibility, and long-session behavior need real desktop validation before stable promotion.
 - **Input parsing:** format detection is heuristic, not semantic extraction. Complex tables, merged cells, and scanned PDFs may need manual cleanup/OCR. Imported week labels remain source values; calendar conflicts are not automatically resolved.

@@ -22,12 +22,21 @@ jobs:
           python-version: '3.12'
           cache: pip
       - run: python -m pip install -r requirements.txt
-      - run: python -m compileall -q app.py desktop.py course_core.py engines.py tests
+      - run: python -m compileall -q app.py desktop.py academy_theme.py course_core.py engines.py tests tools
       - run: git diff --check
       - run: python -m unittest discover -s tests -v
       - name: Native Windows startup
         if: runner.os == 'Windows'
         run: python desktop.py --smoke-test
+      - name: Capture native UI for review
+        if: runner.os == 'Windows'
+        run: python tools/capture_ui.py ui-review
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Windows'
+        with:
+          name: CourseFramework-UI-review
+          path: ui-review/*.png
+          if-no-files-found: error
 
   windows-package:
     needs: verify

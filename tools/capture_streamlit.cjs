@@ -100,8 +100,9 @@ async function main() {
     await page.getByTestId('stExpander').filter({ has: page.getByText('Settings & files', { exact: true }) }).locator('summary').click();
     await choose('Provider', 'Google AI Studio (Gemini)');
     await page.getByTestId('stExpander').filter({ has: page.getByText('Settings & files', { exact: true }) }).locator('summary').click();
-    await page.getByRole('textbox', { name: 'API key', exact: true }).fill('fake-browser-key');
-    await page.getByRole('checkbox', { name: 'Send syllabus to this agent (fees/quota may apply)', exact: true }).check();
+    await page.getByLabel('API key', { exact: true }).fill('fake-browser-key');
+    await page.getByText('Send syllabus to this agent (fees/quota may apply)', { exact: true }).click();
+    assert.equal(await page.getByRole('checkbox', { name: 'Send syllabus to this agent (fees/quota may apply)', exact: true }).isChecked(), true);
     async function captureGeneration(name) {
       await page.getByRole('button', { name: 'Generate', exact: true }).click();
       const busy = page.getByRole('button', { name: 'Generating…', exact: true });

@@ -43,7 +43,7 @@ class CourseMaker:
         self.consent = tk.BooleanVar(value=False)
         self.scope = tk.StringVar(value='All modules')
         self.view = tk.StringVar(value='Course')
-        self.summary = tk.StringVar(value='Paste a syllabus to begin.')
+        self.summary = tk.StringVar(value='Enter a topic or syllabus to begin.')
         self.status = tk.StringVar(value='Ready')
         self.settings = None
         self.title.trace_add('write', lambda *_: self.mark_dirty())
@@ -220,7 +220,7 @@ class CourseMaker:
                 self.summary.set(self.summary.get() + f" · {metadata['lecture_hours']:g} lecture / {metadata['lab_hours']:g} lab h")
         except CourseError:
             self.plan = None
-            self.summary.set('Paste a syllabus to begin.')
+            self.summary.set('Enter a topic or syllabus to begin.')
             self.scope.set('All modules')
             self.scope_picker.configure(values=['All modules'])
 

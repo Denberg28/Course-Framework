@@ -18,6 +18,23 @@ class StreamlitTests(unittest.TestCase):
         self.click('Example')
         self.app.selectbox(key='provider').select('Local template').run()
 
+    def test_simple_topic_list_generates_without_outcomes_hours_or_references(self):
+        source = Path('examples/drone101-topics.txt').read_text(encoding='utf-8')
+        self.app.text_input(key='api_key').set_value('fake-key').run()
+        self.app.checkbox(key='online_consent').check().run()
+        self.app.text_area(key='source').set_value(source)
+        with patch('engines.request_json', return_value=response('A useful draft about drone components.')) as send:
+            self.click('Generate')
+            self.assertEqual(send.call_count, 2)
+        self.assertEqual(self.app.session_state['pending']['title'], 'drone 101')
+        self.assertEqual(self.app.session_state['generation_status']['completed'], 2)
+        self.assertEqual(self.app.session_state['generation_status']['error'], '')
+        self.assertFalse(self.app.error)
+        self.click('Use draft')
+        self.assertIn('## Module 2: drone schematic', self.app.session_state['content'])
+        self.assertIn('A useful draft about drone components.', self.app.session_state['content'])
+        self.assertIn('### Review notes', self.app.session_state['content'])
+
     def test_generate_accepts_newly_pasted_text_in_the_same_click(self):
         self.assertFalse(self.app.button(key='generate_button').disabled)
         self.app.text_input(key='api_key').set_value('fake-key').run()

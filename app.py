@@ -136,7 +136,7 @@ def generate():
     state.generation_status = {'completed': 0, 'total': 0, 'text': '', 'error': ''}
     try:
         if not state.source.strip():
-            raise CourseError('Paste your syllabus, then select Generate.')
+            raise CourseError('Paste your syllabus or topic, then select Generate.')
         cfg = config()
         if cfg.provider != PROVIDERS[0] and not state.online_consent:
             raise CourseError('Allow sending the syllabus to the selected agent first.')
@@ -208,7 +208,7 @@ with st.container(key='syllabus_input'):
     st.markdown('<div id="syllabus" class="cf-section-anchor" tabindex="-1"></div>', unsafe_allow_html=True)
     st.text_area('Syllabus', key='source', height=240, max_chars=180000,
                  on_change=clear_generation_status,
-                 placeholder='Paste the full course syllabus: course details, outcomes, topic/hour table, and references.')
+                 placeholder='Enter a topic, a title with a short topic list, or paste a full syllabus.')
     plan, count = None, 0
     try:
         if state.source.strip():
@@ -313,7 +313,7 @@ with st.container(key='course_output'):
     elif state.content:
         render_course(state.content)
     else:
-        st.caption('Paste a full syllabus and select Generate. Discussion, activity and assessment appear here.')
+        st.caption('Enter a topic or syllabus and select Generate. Discussion, activity and assessment appear here.')
     if state.content:
         with st.expander('Edit course' if not job else 'Accepted course'):
             st.text_area('Course Markdown', key='content', height=360, max_chars=400000)

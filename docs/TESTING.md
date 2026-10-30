@@ -1,13 +1,13 @@
 # Verification and release gates
 
-Target: **0.3.7-rc.1**, baseline `0f9d233`. Evidence is automated and self-reviewed, with simulated provider responses. Live API and manual Windows/high-DPI/accessibility acceptance remain pending.
+Target: **0.3.8-rc.1**, baseline `632b2ac`. Evidence is automated and self-reviewed, with simulated provider responses. Live API and manual Windows/high-DPI/accessibility acceptance remain pending.
 
 | Gate | Check |
 |---|---|
 | Source | `python -m compileall -q app.py desktop.py academy_theme.py course_core.py engines.py course_workflow.py hosted_keys.py lesson_format.py reference_catalog.py tests tools`; `git diff --check` |
 | Core/persistence | File parsing/bounds; atomic failure retains prior file; v1→v2 migration; accepted edits and partial checkpoints round-trip; allow-lists exclude secrets |
 | Generation | One call per module; required sections; quota/truncation failure preserves previous success; resume does not replay completed modules; source/model/endpoint changes do not resume |
-| Teaching format | Ordered discussion/presentation subsections; five questions/options A–D; letter-only answer keys; malformed/missing items rejected; video sections/URLs removed; syllabus-listed bibliography without automatic source additions |
+| Teaching format | Ordered discussion/presentation subsections; five questions/options A–D; letter-only answer keys; malformed/missing layout items noted for review without rejecting provider-completed text; video sections/URLs removed; syllabus-listed bibliography without automatic source additions |
 | Streamlit | No workflow tabs; model/custom selection; consent; selected/all modules; draft acceptance; editor/download persistence; failure/resume; provider change clears credentials |
 | Native Windows | Single-workspace minimum/startup bounds; offline worker; pause after active module; accepted course preservation; partial save/reopen/resume; changed-source acceptance |
 | Package | Windows build; source `desktop.py --smoke-test`; packaged `CourseFramework.exe --smoke-test`; ZIP and SHA256 |
@@ -35,7 +35,7 @@ AppTest uses a fake deployment secret to verify Gemini request header placement,
 
 ## Presentation checks
 
-Regression tests reject duplicate/missing MCQ choices, missing question numbers and invalid answer letters. HTML tests verify closed assessment/key details and escaped untrusted markup. Native tests verify Preview output without launching a real browser in CI. Existing saved content remains readable; the new contract fingerprint starts fresh for unfinished old drafts. The syllabus reference policy and its limits are recorded in docs/REFERENCE_CATALOG.md.
+The strict lint helper detects duplicate/missing MCQ choices, question numbers and invalid answer letters; generation retains such completed drafts with advisory review notes. HTML tests verify closed assessment/key details and escaped untrusted markup. Native tests verify Preview output without launching a real browser in CI. Existing saved content remains readable; the new contract fingerprint starts fresh for unfinished old drafts. The syllabus reference policy and its limits are recorded in docs/REFERENCE_CATALOG.md.
 
 ## Full syllabus and screen allocation regression
 
@@ -82,3 +82,11 @@ Local Python 3.12: 73 tests discovered, 63 passed and 10 native-display skips; c
 On the deployed baseline, filling the source left Generate disabled and displayed Press Ctrl+Enter to apply; applying the textarea then enabled it. The updated action must be enabled before the first paste, submit the focused new text in the first click and remain disabled only while busy. AppTest batches set_value(source) and click(Generate) without an intermediate run, verifies all five full-source module requests and no repeat on rerun. Empty Generate must show the paste instruction and send nothing. Existing no-consent/key/Secrets protections remain required.
 
 Chromium now consents to the no-network fixture before pasting AE 416, then its very next action is Generate without Tab/Ctrl+Enter; all five modules must complete. A later AE 417 clipboard table replaces the earlier source and generates all 13 offline modules by the same direct click. Existing busy/progress placement, model selection, desktop/mobile layout, downloads and native checks remain gates. Local Python 3.12: 75 tests discovered, 65 passed, 10 native-display skips. Final Windows/native/browser/package results must pass before candidate publication. Provider responses remain simulated.
+
+## Simple module creation policy regression
+
+The screenshot source in examples/drone101-topics.txt must yield title drone 101, exactly two modules (drone component, drone schematic), no inferred code, outcomes, hours or references. Capitalized/bulleted/labelled variants also work. A single topic or Course Name/title-only source produces one module. Existing AE 416/417 metadata, hours, bibliography, plain-line outlines and nested subtopics remain required.
+
+Workflow/Streamlit tests generate two completed modules from nonstandard brief responses, retain their text with Review notes, preserve the raw source/project and allow Use draft without demanding missing metadata or MCQs. A provider MAX_TOKENS failure still preserves an earlier checkpoint and stops. Native Windows creates both topics offline. Chromium reproduces the exact informal list on mobile with a deliberately differently headed simulated response, checks 2/2 progress and downloads both module titles plus retained text/review notes. No provider call is made merely because fields are missing.
+
+Local Python 3.12: 80 tests discovered, 69 passed and 11 native-display skips. Final Linux/Windows/native/browser/package checks gate candidate publication. Provider responses are simulated; teaching accuracy and live account performance remain unverified.

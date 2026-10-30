@@ -175,8 +175,31 @@ async function main() {
     await settleScroll();
     await checkLayout();
     await page.screenshot({ path: path.join(target, 'streamlit-ae417-course-desktop.png') });
+    // Screenshot regression: an informal title plus two topics must create two modules.
+    await page.getByRole('link', { name: 'Syllabus', exact: true }).click();
+    await page.getByTestId('stExpander').filter({ has: page.getByText('Settings & files', { exact: true }) }).locator('summary').click();
+    await choose('Provider', 'Google AI Studio (Gemini)');
+    await page.getByTestId('stExpander').filter({ has: page.getByText('Settings & files', { exact: true }) }).locator('summary').click();
+    await page.getByText('Send syllabus to this agent (fees/quota may apply)', { exact: true }).click();
+    await page.waitForFunction(() => document.querySelector('input[aria-label="Send syllabus to this agent (fees/quota may apply)"]')?.checked);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole('textbox', { name: 'Syllabus', exact: true }).fill(
+      fs.readFileSync(path.resolve(__dirname, '../examples/drone101-topics.txt'), 'utf8'));
+    await page.getByRole('button', { name: 'Generate', exact: true }).click();
+    await page.getByText('Draft ready · 2/2 complete', { exact: true }).waitFor();
+    await page.getByText(/drone 101 · 2 modules · 0 outcomes/).waitFor();
+    await page.screenshot({ path: path.join(target, 'streamlit-simple-topics-mobile.png') });
+    const simpleDownloadEvent = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Download Markdown', exact: true }).click();
+    const simpleDownload = await simpleDownloadEvent;
+    await simpleDownload.saveAs(path.join(target, 'simple-topic-draft.md'));
+    const simpleDraft = fs.readFileSync(path.join(target, 'simple-topic-draft.md'), 'utf8');
+    assert.equal((simpleDraft.match(/^## Module /gm) || []).length, 2);
+    assert.ok(simpleDraft.includes('## Module 2: drone schematic'));
+    assert.ok(simpleDraft.includes('Identify drone components'));
+    assert.ok(simpleDraft.includes('### Review notes'));
     assert.equal(await page.getByTestId('stException').count(), 0);
-    console.log('Browser smoke passed: direct first-click paste/generation, model selection, offline download, simulated in-flight progress, scrollbar/toolbar geometry, desktop/mobile navigation, reduced motion, AE 417 clipboard table and all 13 modules.');
+    console.log('Browser smoke passed: direct first-click paste/generation, model selection, offline download, simulated in-flight progress, scrollbar/toolbar geometry, desktop/mobile navigation, reduced motion, AE 417 all 13 modules, informal drone 101 two-module mobile generation with advisory format review.');
   } finally {
     if (browser) await browser.close();
     server.kill('SIGTERM');

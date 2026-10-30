@@ -10,7 +10,7 @@ import re
 import tempfile
 import zipfile
 
-VERSION = "0.3.7-rc.1"
+VERSION = "0.3.8-rc.1"
 MAX_FILE_BYTES = 8 * 1024 * 1024
 MAX_TEXT = 180_000
 MAX_OUTPUT = 400_000
@@ -140,6 +140,7 @@ WEEK = re.compile(r"^(weeks?|modules?|units?|lessons?)\s+(\d+(?:\s*[-–]\s*\d+)
 HOUR_VALUE = re.compile(r"\d+(?:\.\d+)?")
 HOUR_ROW = re.compile(r"^(.+?)\s+(\d+(?:\.\d+)?|[-–—])(?:\s+(\d+(?:\.\d+)?|[-–—]))?$")
 OUTCOME_INTRO = re.compile(r"(?:after|upon)\s+(?:completing|completion\s+of).*\b(?:able\s+to|can)\s*:?$", re.I)
+LIST_ITEM = re.compile(r'^(?:\d+[.)]\s+|[-*•]\s+)')
 
 
 def topic_allocation(topic):
@@ -206,6 +207,14 @@ def analyze_syllabus(syllabus: str) -> dict:
     table_headers = None
     hour_columns = None
     hour_indices = None
+    simple_lines = [syllabus_cell(raw.strip().strip('# ')) for raw in syllabus.splitlines() if raw.strip()]
+    first = simple_lines[0]
+    first_key = first.partition(':')[0].lower().rstrip(':').strip()
+    informal_title = (first if len(simple_lines) > 1 and
+                      (LIST_ITEM.match(simple_lines[1]) or WEEK.match(simple_lines[1])) and
+                      not LIST_ITEM.match(first) and not WEEK.match(first) and
+                      first_key not in META and first_key not in SECTION and
+                      first_key not in {'course syllabus', 'syllabus'} and '|' not in first else None)
     explicit_outline = bool(re.search(r"^\s*(?:#+\s*)?(?:weeks?|modules?|units?|lessons?)\s+\d", syllabus, re.I | re.M))
     for raw in syllabus.splitlines():
         cells = syllabus_cells(raw)
@@ -225,6 +234,9 @@ def analyze_syllabus(syllabus: str) -> dict:
             continue
         if line.lower() in {"course syllabus", "syllabus"}:
             continue
+        if line == informal_title and not result['metadata'] and not result['topics']:
+            result['metadata']['title'] = line[:300]
+            continue
         key, separator, value = line.partition(":")
         normalized = key.lower().strip().strip("*")
         if separator and normalized in META:
@@ -240,7 +252,7 @@ def analyze_syllabus(syllabus: str) -> dict:
         if OUTCOME_INTRO.search(line):
             section, pending, table_headers, hour_columns, hour_indices = 'outcomes', None, None, None, None
             continue
-        if not result['metadata'] and not result['topics'] and re.fullmatch(r'[A-Za-z]{2,8}[- ]+\d{2,4}[A-Za-z]?', line):
+        if not result['metadata'] and not result['topics'] and re.fullmatch(r'[A-Z]{2,8}[- ]+\d{2,4}[A-Z]?', line):
             result['metadata']['code'] = line
             pending, section = 'title', 'metadata'
             continue
@@ -301,6 +313,9 @@ def analyze_syllabus(syllabus: str) -> dict:
             line = value.strip()
             if line.lower() in SECTION or section == 'other':
                 continue
+        # A numbered/bulleted outline needs no formal Topics heading, even after metadata.
+        if section == 'metadata' and (LIST_ITEM.match(line) or WEEK.match(line)):
+            section, pending = 'topics', None
         if pending:
             result["metadata"][pending] = line
             pending = None
@@ -340,12 +355,22 @@ def analyze_syllabus(syllabus: str) -> dict:
             result["metadata"]["description"] += " " + line
         elif section == "metadata" and result['metadata'].get('code') and result['metadata'].get('title'):
             result['metadata']['description'] = line
+    if not result['topics']:
+        subject = next((result['metadata'][key] for key in ('title', 'code', 'description')
+                        if result['metadata'].get(key)), '')
+        if not subject:
+            subject = next((line for line in simple_lines if any(c.isalnum() for c in line)
+                            and line.lower().rstrip(':') not in SECTION), '')
+        if subject:
+            result['topics'].append({'title': subject[:300], 'schedule': '', 'subtopics': []})
+    if not result['metadata'].get('title') and len(result['topics']) == 1:
+        result['metadata']['title'] = result['metadata'].get('code') or result['topics'][0]['title'][:300]
     if len(result["topics"]) > 80:
         raise CourseError("More than 80 modules detected. Simplify the outline or import a smaller section.")
     if not result["topics"]:
-        result["warnings"].append("No topics detected. Add Week 1: Topic lines or a Topics section.")
+        result["warnings"].append("Enter a topic, title or short outline to create a module.")
     if not result["outcomes"]:
-        result["warnings"].append("No course learning outcomes detected. Add them before finalizing the course.")
+        result["warnings"].append("No outcomes supplied. Draft learning objectives can be proposed for review.")
     if not result["metadata"].get("title"):
         result["warnings"].append("Course title is missing. Enter it in the course title field.")
     for field, label in (('lecture_hours', 'lecture'), ('lab_hours', 'lab')):
@@ -364,7 +389,7 @@ def analyze_syllabus(syllabus: str) -> dict:
 def build_course_markdown(syllabus: str, title: str = "") -> str:
     plan = analyze_syllabus(syllabus)
     if not plan["topics"]:
-        raise CourseError("Add a Topics section or Week 1: Topic lines before creating a local framework.")
+        raise CourseError("Enter a topic, title or short outline to create a module.")
     title = title.strip() or plan["metadata"].get("title", "Untitled Course")
     lines = [f"# {title}", "", "> Local teaching framework — add subject content and review before teaching.", ""]
     for field, value in plan["metadata"].items():

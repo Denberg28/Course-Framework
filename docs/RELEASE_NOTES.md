@@ -1,9 +1,11 @@
-# Course Framework 0.3.7-rc.1 — Fix the disabled Generate button after paste
+# Course Framework 0.3.8-rc.1 — Just create the module
 
-Pasting a syllabus could leave Generate disabled because Streamlit had not yet applied the textarea text and the server still saw zero modules. Users had to blur the field or press Ctrl+Enter before the button became usable.
+A topic, a title plus a short numbered/bulleted list, or a full syllabus is enough to create a draft. Course codes, Week/Topics labels, outcomes, hours and references are optional. A single topic/title creates one module.
 
-Generate now remains available so its click submits the freshly pasted syllabus directly. It is still disabled while generating. An empty click shows a clear paste instruction and makes no provider request. Online consent and key validation remain required; completed modules, accepted material, selected models and 3.8 timeout improvements are retained.
+The supplied drone 101 example now creates two modules: drone component and drone schematic. It is no longer mistaken for a code/title/description with zero topics. Full AE 416 and AE 417 syllabi retain their original metadata, hours and readings.
 
-Save your project before refreshing the Streamlit app. Paste the syllabus, select the model, check Send syllabus to this agent, then Generate. For an older unreloaded session, Ctrl+Enter applies the text as an immediate workaround.
+The agent still receives the preferred discussion/activity/five-MCQ layout, but completed nonempty text is kept when its format differs. Layout issues become review notes rather than failed requests. Missing references are marked without inventing a reading list; unspecified hours stay unassigned. See docs/MODULE_POLICY.md.
 
-Publication requires Linux/Windows/native tests, Chromium same-click paste/generation, desktop/mobile progress/navigation/download checks, Windows packaging and packaged startup. Tests use simulated providers and no real key. This remains an unsigned prerelease; extract the whole Windows ZIP before running CourseFramework.exe. Live provider access/latency and teaching accuracy require separate validation.
+Source text and accepted material remain intact. New jobs use the updated input/prompt contract; older unfinished jobs need fresh generation, while accepted content stays readable. Save projects before refreshing Streamlit. Online consent, keys, provider completion, bounded output and no-automatic-retry behavior remain.
+
+Publication requires Linux/Windows/native tests, mobile browser generation/download for the exact simple example, desktop/mobile/progress/model/table regressions, Windows packaging and packaged startup. Providers are simulated; live account behavior and teaching accuracy require separate validation. This is an unsigned prerelease; extract the whole ZIP before running CourseFramework.exe.

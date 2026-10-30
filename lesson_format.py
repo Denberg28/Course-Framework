@@ -39,6 +39,16 @@ def validate_lesson(text):
         raise CourseError('Use only numbered answer letters in the answer key.')
 
 
+def lesson_review_notes(text):
+    """Formatting is advisory when generating; retain useful completed drafts."""
+    try:
+        validate_lesson(text)
+    except CourseError as error:
+        note = str(error).split(' Completed modules')[0].split(' Retry this module')[0]
+        return [note.rstrip('.') + '. Check the draft before teaching.']
+    return []
+
+
 def presentation_parts(text):
     """Separate assessment/key from prose for collapsible previews; preserve legacy text."""
     modules = re.split(r'(?m)(^## Module \d+:[^\n]*\n)', text)

@@ -6,6 +6,7 @@
 - Normalize field/value cells, HTML line breaks, nonbreaking spaces and table rules; retain column positions for empty/dash lecture/lab cells and reversed hour headers. Preserve multiline Word cells in their row.
 - Detect all 13 topics, seven objectives, eight supplied bibliography entries and 54 lecture hours; retain the declared zero lab total without inventing module lab values or weeks.
 - Preserve source text and accepted courses. The changed parser contract starts fresh jobs instead of resuming checkpoints with different module indices.
+- Clear replacement approval in the Generate callback before widgets register, so generating a changed syllabus over an existing draft does not stop after the first module.
 - Add parser/Word, 13-request simulated generation, Streamlit/native and actual-browser clipboard/download regressions alongside AE 416 checks.
 
 ## 0.3.4-rc.1 — Visible scrollbar and generation progress

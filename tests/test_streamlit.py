@@ -19,11 +19,16 @@ class StreamlitTests(unittest.TestCase):
         self.app.selectbox(key='provider').select('Local template').run()
 
     def test_ae417_clipboard_table_generates_thirteen_modules(self):
+        self.sample_local()
+        self.click('Generate')
+        self.app.session_state['content'] = 'Keep accepted material'
+        self.app.run()
         source = Path('examples/AE417-syllabus.md').read_text(encoding='utf-8')
         # Browser table copies have tabs, blank leading cells and indented rows.
         source = '\n'.join('\t'.join(c.strip() for c in line[1:-1].split('|'))
                            for line in source.splitlines() if not line.startswith('|---'))
         self.app.text_area(key='source').set_value(source).run()
+        self.app.selectbox(key='provider').select('Google AI Studio (Gemini)').run()
         self.assertIn('13 modules · 7 outcomes', ' '.join(c.value for c in self.app.caption))
         self.assertIn('54 lecture h · 0 lab h · 54 total h', ' '.join(c.value for c in self.app.caption))
         self.app.text_input(key='api_key').set_value('fake-key').run()
@@ -36,6 +41,9 @@ class StreamlitTests(unittest.TestCase):
         self.assertEqual(self.app.session_state['pending']['indices'], list(range(13)))
         self.assertEqual(self.app.session_state['generation_status']['completed'], 13)
         self.assertEqual(self.app.session_state['generation_status']['total'], 13)
+        self.assertEqual(self.app.session_state['content'], 'Keep accepted material')
+        self.assertFalse(self.app.session_state['replace_course'])
+        self.app.checkbox(key='replace_course').check().run()
         self.click('Use draft')
         self.assertEqual(self.app.session_state['content'].count('## Module '), 13)
         self.assertIn('## Module 13: Pre-Deployment Seminar and Internship Requirements', self.app.session_state['content'])

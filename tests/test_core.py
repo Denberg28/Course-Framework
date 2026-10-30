@@ -8,10 +8,50 @@ import zipfile
 
 from course_core import (CourseError, SAMPLE, MAX_FILE_BYTES, analyze_syllabus, atomic_write,
                          build_course_markdown, export_bundle, export_html, extract_text,
-                         load_project, make_project, project_bytes)
+                         course_allocation, load_project, make_project, project_bytes)
 
 
 class CourseTests(unittest.TestCase):
+    def test_full_ae416_syllabus_preserves_metadata_outcomes_readings_and_hours(self):
+        source = Path('examples/AE416-syllabus.txt').read_text(encoding='utf-8')
+        plan = analyze_syllabus(source)
+        self.assertEqual(plan['metadata']['code'], 'AE 416')
+        self.assertEqual(plan['metadata']['title'], 'RESEARCH METHODS AND APPLICATION')
+        self.assertTrue(plan['metadata']['description'].startswith('The course includes lectures'))
+        self.assertEqual(plan['metadata']['units'], '2 units lecture, 1 unit laboratory = 3 Units')
+        self.assertEqual(plan['metadata']['weekly_hours'], '2 hours lecture, 3 hours laboratory = 5 Hours')
+        self.assertEqual(plan['metadata']['prerequisite'], 'Fourth Year Standing')
+        self.assertEqual(plan['metadata']['hours'], '90')
+        self.assertEqual(len(plan['outcomes']), 3)
+        self.assertEqual([t['title'] for t in plan['topics']], [
+            'Nature and Characteristics of Research', 'Research Problem and Objectives',
+            'Review of Related Literature', 'Research Design',
+            'Selection and Finalization of Research Topic Applicable to Aviation Industry'])
+        self.assertEqual([(t['lecture_hours'], t['lab_hours']) for t in plan['topics']],
+                         [(6, 6), (6, 9), (8, 12), (8, 12), (8, 15)])
+        self.assertTrue(all(not t['schedule'] for t in plan['topics']))
+        self.assertEqual(len(plan['references']), 3)
+        self.assertTrue(plan['references'][1].startswith('Adanza,'))
+        self.assertFalse(plan['warnings'])
+
+    def test_pasted_hour_table_tabs_spaces_and_pipes_agree(self):
+        source = Path('examples/AE416-syllabus.txt').read_text(encoding='utf-8')
+        expected = analyze_syllabus(source)
+        for separator in (' ', '    ', ' | '):
+            with self.subTest(separator=separator):
+                self.assertEqual(analyze_syllabus(source.replace('\t', separator)), expected)
+
+    def test_hour_allocation_mismatch_is_flagged_without_rewriting_source(self):
+        source = 'Course Name: Research\nLearning Outcomes:\n1. Evaluate evidence.\nLEC HRS LAB HRS\n1. Methods 6.5 9\nTotal: 8 9\nTextbook\nSupplied reading'
+        plan = analyze_syllabus(source)
+        self.assertEqual(plan['metadata']['lecture_hours'], 8)
+        self.assertEqual(plan['topics'][0]['lecture_hours'], 6.5)
+        self.assertEqual(len(plan['warnings']), 1)
+        self.assertIn('differs', plan['warnings'][0])
+        self.assertIn('6.5 | 9', course_allocation(plan))
+        reverse = analyze_syllabus(source.replace('LEC HRS LAB HRS', 'LAB HRS LEC HRS'))
+        self.assertEqual(reverse['topics'][0]['lab_hours'], 6.5)
+
     def test_metadata_outcomes_and_references_are_not_modules(self):
         plan = analyze_syllabus(SAMPLE)
         self.assertEqual(plan['metadata']['title'], 'Aircraft Structures')

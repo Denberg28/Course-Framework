@@ -5,7 +5,7 @@ import hashlib
 import re
 
 from course_core import (CourseError, MAX_OUTPUT, analyze_syllabus, bounded_text,
-                         make_project, validate_pending)
+                         course_allocation, make_project, topic_allocation, validate_pending)
 from engines import EngineConfig, generate_course
 from reference_catalog import reference_section, restrict_generated_reference_links
 from lesson_format import validate_lesson
@@ -18,7 +18,7 @@ def profile(config):
     # No key in the fingerprint. A replacement key for the same engine can resume.
     base = config.base_url.strip().rstrip('/') if config.provider == 'OpenAI-compatible' else ''
     model = '' if config.provider == 'Local template' else config.model.strip().removeprefix('models/')
-    return hashlib.sha256(('teaching-mcq-v1\n' + config.provider + '\n' + model + '\n' + base).encode()).hexdigest()
+    return hashlib.sha256(('teaching-hours-v2\n' + config.provider + '\n' + model + '\n' + base).encode()).hexdigest()
 
 
 def new_job(syllabus, title, config, indices=None):
@@ -54,19 +54,23 @@ def remove_video_sections(text):
 def draft_text(job):
     job = validate_pending(job)
     plan = analyze_syllabus(job['syllabus'])
-    lines = [f"# {job['title']}", '', '> Draft · instructor review required.', '', '## Course outcomes', '']
+    lines = [f"# {job['title']}", '', '> Draft · instructor review required.', '']
+    for field, value in plan['metadata'].items():
+        if field != 'title':
+            lines += [f"**{field.replace('_', ' ').title()}:** {value:g}" if isinstance(value, (int, float))
+                      else f"**{field.replace('_', ' ').title()}:** {value}", '']
+    lines += ['## Course outcomes', '']
     lines += [f'{i}. {text}' for i, text in enumerate(plan['outcomes'], 1)] or ['[Confirm course outcomes.]']
-    lines += ['', '## Modules', '']
-    for index in job['indices']:
-        topic = plan['topics'][index]
-        lines.append(f"- Module {index + 1}: {topic['title']} · Week(s): {topic['schedule'] or 'Unassigned'}")
+    lines += ['', '## Course allocation', '', course_allocation(plan, job['indices'])]
+    if plan['references']:
+        lines += ['', '## Syllabus readings', '', *[f'- {r}' for r in plan['references']]]
     lines += ['']
     lines += job['completed']
     remaining = job['indices'][len(job['completed']):]
     if remaining:
         lines += ['', '## Not generated yet', *[f"- Module {i + 1}: {plan['topics'][i]['title']}" for i in remaining]]
     lines += ['']
-    result = '\n'.join(lines)
+    result = remove_video_sections('\n'.join(lines))
     bounded_text(result, 'Course draft', MAX_OUTPUT)
     return result
 
@@ -84,10 +88,12 @@ def advance(job, config, *, transport=None):
     text = restrict_generated_reference_links(remove_video_sections(text))
     text = re.sub(r'(?ims)^###\s+References\s*\n.*?(?=^#{1,3}\s|\Z)', '', text)
     text = re.sub(r'(?m)^#{1,2} .+\n?', '', text)
-    text = re.sub(r'(?im)^\*\*Week\(s\):\*\*[^\n]*(?:\n|$)', '', text).strip()
+    text = re.sub(r'(?im)^\*\*(?:Week\(s\)|Allocation):\*\*[^\n]*(?:\n|$)', '', text).strip()
     if config.provider != 'Local template':
         validate_lesson(text)
-    module = f"## Module {index + 1}: {topic['title']}\n\n**Week(s):** {topic['schedule'] or 'Unassigned'}\n\n{text}\n\n"
+    allocation = (f"**Allocation:** {topic_allocation(topic)}" if 'lecture_hours' in topic or 'lab_hours' in topic
+                  else f"**Week(s):** {topic['schedule'] or 'Unassigned'}")
+    module = f"## Module {index + 1}: {topic['title']}\n\n{allocation}\n\n{text}\n\n"
     module += reference_section(job['syllabus'], topic['title']) + '\n'
     updated = validate_pending({**job, 'completed': [*job['completed'], module]})
     draft_text(updated)  # Check the entire rendered draft bound before exposing a checkpoint.

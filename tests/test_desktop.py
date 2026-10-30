@@ -39,6 +39,22 @@ class DesktopTests(unittest.TestCase):
         self.app.provider_changed()
         self.root.update()
 
+    def test_full_syllabus_retains_hours_in_native_outline_and_generation(self):
+        source = Path('examples/AE416-syllabus.txt').read_text(encoding='utf-8')
+        self.app.set_source(source)
+        self.app.provider.set(PROVIDERS[0])
+        self.app.provider_changed()
+        self.root.update()
+        self.assertEqual(len(self.app.plan['topics']), 5)
+        self.assertIn('36 lecture / 54 lab h', self.app.summary.get())
+        with patch('desktop.messagebox.showinfo') as dialog:
+            self.app.show_outline()
+            self.assertIn('Lecture: 6 h · Lab: 9 h', dialog.call_args.args[1])
+        self.app.start()
+        self.wait_worker()
+        self.assertEqual(len(self.app.job['completed']), 5)
+        self.assertIn('Lecture: 8 h · Lab: 15 h', self.app.text(self.app.candidate))
+
     def test_direct_offline_generation_stages_then_accepts(self):
         self.local_sample()
         self.app.start()

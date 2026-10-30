@@ -14,7 +14,7 @@ from tkinter.scrolledtext import ScrolledText
 from academy_theme import FIELD, INK, LINE, PAPER, WARM, apply_desktop_theme
 from course_core import (CourseError, SAMPLE, VERSION, analyze_syllabus, atomic_write,
                          export_bundle, export_html, extract_text, load_project,
-                         make_project, project_bytes, read_file)
+                         make_project, project_bytes, read_file, topic_allocation)
 from engines import EngineConfig, PROVIDERS
 from course_workflow import GEMINI_MODELS, accept_job, advance, can_resume, draft_text, is_complete, new_job
 
@@ -215,6 +215,9 @@ class CourseMaker:
             if self.scope.get() not in choices:
                 self.scope.set(choices[0])
             self.summary.set(f"{len(self.plan['topics'])} modules · {len(self.plan['outcomes'])} outcomes")
+            metadata = self.plan['metadata']
+            if 'lecture_hours' in metadata and 'lab_hours' in metadata:
+                self.summary.set(self.summary.get() + f" · {metadata['lecture_hours']:g} lecture / {metadata['lab_hours']:g} lab h")
         except CourseError:
             self.plan = None
             self.summary.set('Paste a syllabus to begin.')
@@ -224,7 +227,7 @@ class CourseMaker:
     def show_outline(self):
         self.review()
         if self.plan:
-            lines = [f"{i + 1}. {t['title']} · {t['schedule'] or 'Week unassigned'}" for i, t in enumerate(self.plan['topics'])]
+            lines = [f"{i + 1}. {t['title']} · {topic_allocation(t)}" for i, t in enumerate(self.plan['topics'])]
             lines += ['', *self.plan['warnings']]
             messagebox.showinfo('Outline', '\n'.join(lines), parent=self.root)
 

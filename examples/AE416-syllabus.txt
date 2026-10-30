@@ -1,0 +1,23 @@
+AE 416
+RESEARCH METHODS AND APPLICATION
+The course includes lectures on research technique, problem solving, survey of related literature, methods of data gathering, data interpretation and reporting, and implementation of findings.
+2 units lecture, 1 unit laboratory = 3 Units
+2 hours lecture, 3 hours laboratory = 5 Hours
+Fourth Year Standing
+After completing this course, the student must be able to:
+1. Understand the problem and objectives of the research.
+2. Know how to collect, evaluate, and transform data into meaningful information.
+3. Present information in a proper report format.
+	LEC HRS	LAB HRS
+Total:	36	54
+1. Nature and Characteristics of Research	6	6
+2. Research Problem and Objectives	6	9
+3. Review of Related Literature	8	12
+4. Research Design	8	12
+5. Selection and Finalization of Research Topic Applicable to Aviation Industry	8	15
+NONE
+Textbook
+1. Paler-Calmorin, Laurentina. Methods of Research and Thesis Writing. 1995.
+References
+2.1 Adanza, Estela G. Research Methods: Principles and Applications. 1995.
+2.2 Sevilla, C.G. Research Methods. Revised Edition, 1992.

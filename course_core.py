@@ -10,7 +10,7 @@ import re
 import tempfile
 import zipfile
 
-VERSION = "0.3.0-rc.1"
+VERSION = "0.3.1-rc.1"
 MAX_FILE_BYTES = 8 * 1024 * 1024
 MAX_TEXT = 180_000
 MAX_OUTPUT = 400_000
@@ -124,16 +124,47 @@ SECTION = {
     "objectives": "outcomes", "outcomes": "outcomes",
     "course outline": "topics", "course outline: lecture": "topics",
     "topics": "topics", "course content": "topics", "schedule": "topics",
-    "references": "references", "textbooks": "references",
+    "references": "references", "textbook": "references", "textbooks": "references",
     "suggested textbooks and references": "references",
     "assessment": "other", "assessments": "other", "grading": "other",
     "grading system": "other", "course policies": "other",
 }
 WEEK = re.compile(r"^(weeks?|modules?|units?|lessons?)\s+(\d+(?:\s*[-–]\s*\d+)?)\s*[:.)-]?\s*(.*)$", re.I)
+HOUR_ROW = re.compile(r"^(.+?)\s+(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)$")
+OUTCOME_INTRO = re.compile(r"(?:after|upon)\s+(?:completing|completion\s+of).*\b(?:able\s+to|can)\s*:?$", re.I)
+
+
+def topic_allocation(topic):
+    """Display supplied hours without inventing week assignments."""
+    parts = []
+    if topic.get('schedule'):
+        parts.append(f"Week(s): {topic['schedule']}")
+    for field, label in (('lecture_hours', 'Lecture'), ('lab_hours', 'Lab')):
+        if field in topic:
+            parts.append(f"{label}: {topic[field]:g} h")
+    return ' · '.join(parts) or 'Week(s): Unassigned'
+
+
+def course_allocation(plan, indices=None):
+    """A course map shared by offline, AI drafts and both interfaces."""
+    selected = list(range(len(plan['topics']))) if indices is None else indices
+    has_hours = any('lecture_hours' in plan['topics'][i] or 'lab_hours' in plan['topics'][i] for i in selected)
+    lines = ['| Module | Topic | Week(s) |' + (' Lecture h | Lab h |' if has_hours else ''),
+             '|---|---|---|' + ('---:|---:|' if has_hours else '')]
+    for i in selected:
+        topic = plan['topics'][i]
+        row = f"| {i + 1} | {topic['title'].replace('|', '/')} | {topic['schedule'] or '—'} |"
+        if has_hours:
+            row += ''.join(f" {topic[k]:g} |" if k in topic else ' — |' for k in ('lecture_hours', 'lab_hours'))
+        lines.append(row)
+    if has_hours:
+        totals = [sum(plan['topics'][i].get(k, 0) for i in selected) for k in ('lecture_hours', 'lab_hours')]
+        lines.append(f"| | Selected total | | {totals[0]:g} | {totals[1]:g} |")
+    return '\n'.join(lines)
 
 
 def clean_item(text):
-    return re.sub(r"^\s*(?:[-*•]\s+|\d+(?:\.\d+)*[.)]\s+)", "", text).strip()
+    return re.sub(r"^\s*(?:[-*•]\s+|\d+(?:\.\d+)+(?:[.)])?\s+|\d+[.)]\s+)", "", text).strip()
 
 
 def analyze_syllabus(syllabus: str) -> dict:
@@ -144,6 +175,7 @@ def analyze_syllabus(syllabus: str) -> dict:
     section = "topics"
     pending = None
     table_headers = None
+    hour_columns = None
     explicit_outline = bool(re.search(r"^\s*(?:#+\s*)?(?:weeks?|modules?|units?|lessons?)\s+\d", syllabus, re.I | re.M))
     for raw in syllabus.splitlines():
         line = raw.strip().strip("# ").strip()
@@ -158,10 +190,50 @@ def analyze_syllabus(syllabus: str) -> dict:
             pending = META[normalized] if not value.strip() else None
             section = "metadata"
             table_headers = None
+            hour_columns = None
             continue
         heading = line.lower().rstrip(":").strip().strip("*")
+        # Common curriculum sheets use plain course headings and an outcome sentence.
+        if OUTCOME_INTRO.search(line):
+            section, pending, table_headers, hour_columns = 'outcomes', None, None, None
+            continue
+        if not result['metadata'] and not result['topics'] and re.fullmatch(r'[A-Za-z]{2,8}[- ]+\d{2,4}[A-Za-z]?', line):
+            result['metadata']['code'] = line
+            pending, section = 'title', 'metadata'
+            continue
+        if re.match(r'^\d+(?:\.\d+)?\s+units?\b', line, re.I) and re.search(r'\b(?:lecture|laboratory|lab)\b', line, re.I):
+            result['metadata']['units'] = line
+            continue
+        if re.match(r'^\d+(?:\.\d+)?\s+hours?\b', line, re.I) and re.search(r'\b(?:lecture|laboratory|lab)\b', line, re.I):
+            result['metadata']['weekly_hours'] = line
+            continue
+        if re.fullmatch(r'.+\byear\s+standing', line, re.I):
+            result['metadata']['prerequisite'] = line
+            continue
+        # Tabs, pasted spaces and DOCX/Markdown pipes all carry the same hour table.
+        flat = re.sub(r'\s+', ' ', line.replace('|', ' ')).strip()
+        lecture = re.search(r'\b(?:lec|lecture)\s*(?:hrs?|hours?)\b', flat, re.I)
+        lab = re.search(r'\b(?:lab|laboratory)\s*(?:hrs?|hours?)\b', flat, re.I)
+        if lecture and lab and not re.search(r'\d', flat):
+            hour_columns = ('lecture_hours', 'lab_hours') if lecture.start() < lab.start() else ('lab_hours', 'lecture_hours')
+            section, pending, table_headers = 'topics', None, None
+            continue
+        if hour_columns:
+            row = HOUR_ROW.fullmatch(flat)
+            if row:
+                title = clean_item(row[1]).rstrip(':').strip()
+                hours = {field: float(number) for field, number in zip(hour_columns, (row[2], row[3]))}
+                if title.lower() in {'total', 'totals'}:
+                    result['metadata'].update(hours)
+                    result['metadata']['hours'] = f"{sum(hours.values()):g}"
+                else:
+                    result['topics'].append({'title': title, 'schedule': '', 'subtopics': [], **hours})
+                continue
+            if heading == 'none':
+                section, hour_columns = 'other', None
+                continue
         if heading in SECTION:
-            section, pending, table_headers = SECTION[heading], None, None
+            section, pending, table_headers, hour_columns = SECTION[heading], None, None, None
             continue
         if separator and normalized in SECTION:
             section, pending = SECTION[normalized], None
@@ -209,6 +281,8 @@ def analyze_syllabus(syllabus: str) -> dict:
                 result["topics"].append({"title": clean_item(line), "schedule": "", "subtopics": []})
         elif section == "metadata" and result["metadata"].get("description"):
             result["metadata"]["description"] += " " + line
+        elif section == "metadata" and result['metadata'].get('code') and result['metadata'].get('title'):
+            result['metadata']['description'] = line
     if len(result["topics"]) > 80:
         raise CourseError("More than 80 modules detected. Simplify the outline or import a smaller section.")
     if not result["topics"]:
@@ -217,7 +291,15 @@ def analyze_syllabus(syllabus: str) -> dict:
         result["warnings"].append("No course learning outcomes detected. Add them before finalizing the course.")
     if not result["metadata"].get("title"):
         result["warnings"].append("Course title is missing. Enter it in the course title field.")
-    if any(not t["schedule"] for t in result["topics"]):
+    for field, label in (('lecture_hours', 'lecture'), ('lab_hours', 'lab')):
+        supplied = [t[field] for t in result['topics'] if field in t]
+        if supplied:
+            total = sum(supplied)
+            if field in result['metadata'] and abs(result['metadata'][field] - total) > .001:
+                result['warnings'].append(f"Supplied {label} total ({result['metadata'][field]:g} h) differs from module hours ({total:g} h). Confirm the syllabus.")
+            if len(supplied) != len(result['topics']):
+                result['warnings'].append(f'Some modules have no {label} hours. Confirm the allocation.')
+    if any(not t["schedule"] and 'lecture_hours' not in t and 'lab_hours' not in t for t in result["topics"]):
         result["warnings"].append("Some modules have no week assignment. Their schedule remains unassigned.")
     return result
 
@@ -233,12 +315,12 @@ def build_course_markdown(syllabus: str, title: str = "") -> str:
             lines += [f"**{field.replace('_', ' ').title()}:** {value}", ""]
     lines += ["## Course learning outcomes", ""]
     lines += [f"{i}. {value}" for i, value in enumerate(plan["outcomes"], 1)] or ["[Add measurable course outcomes.]"]
-    lines += ["", "## Course map", "", "| Module | Week(s) | Topic |", "|---|---|---|"]
-    for i, topic in enumerate(plan["topics"], 1):
-        lines += [f"| {i} | {topic['schedule'] or 'Unassigned'} | {topic['title'].replace('|', '/')} |"]
+    lines += ["", "## Course map", "", course_allocation(plan)]
     for i, topic in enumerate(plan["topics"], 1):
         subject = topic["title"]
-        lines += ["", f"## Module {i}: {subject}", "", f"**Week(s):** {topic['schedule'] or 'Unassigned'}", "",
+        allocation = (f"**Allocation:** {topic_allocation(topic)}" if 'lecture_hours' in topic or 'lab_hours' in topic
+                      else f"**Week(s):** {topic['schedule'] or 'Unassigned'}")
+        lines += ["", f"## Module {i}: {subject}", "", allocation, "",
                   "### Discussion and presentation", "#### Introduction",
                   f"Objective: explain and apply {subject}. [Align with the supplied course outcomes.]", "",
                   "#### Presentation sequence",

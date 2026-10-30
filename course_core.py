@@ -10,7 +10,7 @@ import re
 import tempfile
 import zipfile
 
-VERSION = "0.3.1-rc.1"
+VERSION = "0.3.2-rc.1"
 MAX_FILE_BYTES = 8 * 1024 * 1024
 MAX_TEXT = 180_000
 MAX_OUTPUT = 400_000
@@ -125,6 +125,9 @@ SECTION = {
     "course outline": "topics", "course outline: lecture": "topics",
     "topics": "topics", "course content": "topics", "schedule": "topics",
     "references": "references", "textbook": "references", "textbooks": "references",
+    "reference": "references", "bibliography": "references", "reading list": "references",
+    "required readings": "references", "recommended readings": "references",
+    "textbooks and references": "references",
     "suggested textbooks and references": "references",
     "assessment": "other", "assessments": "other", "grading": "other",
     "grading system": "other", "course policies": "other",

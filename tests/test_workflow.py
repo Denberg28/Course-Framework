@@ -147,14 +147,15 @@ class WorkflowTests(unittest.TestCase):
             with self.subTest(change=change), self.assertRaises(CourseError):
                 validate_pending({**job, **change})
 
-    def test_video_suggestions_removed_and_official_references_appended(self):
+    def test_video_suggestions_removed_and_syllabus_references_appended(self):
         syllabus = SAMPLE + '\nhttps://youtu.be/realSourceID\n'
         bad = MODULE + '\n### Video resources\n[Suggestion](https://youtu.be/inventedID)\n'
         job = advance(new_job(syllabus, '', self.config, [0]), self.config, transport=lambda *args: response(bad))
         text = draft_text(job)
         self.assertNotIn('youtu.be', text)
         self.assertNotIn('Video resources', text)
-        self.assertIn('https://www.faa.gov/', text)
+        self.assertNotIn('https://www.faa.gov/', text)
+        self.assertIn('Instructor-supplied aircraft structural manual', text)
         self.assertIn('### References', text)
 
     def test_missing_sections_and_truncated_output_preserve_checkpoint(self):

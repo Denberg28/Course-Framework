@@ -62,9 +62,38 @@ class StreamlitTests(unittest.TestCase):
         with patch('engines.request_json', return_value=response()) as send:
             self.click('Generate')
             self.assertIn('/gemini-3.8-flash:generateContent', send.call_args.args[0])
+            self.assertEqual(send.call_args.kwargs['timeout'], 180)
+            self.assertEqual(send.call_args.args[2]['generationConfig']['thinkingConfig'], {'thinkingLevel': 'medium'})
         self.assertEqual(self.app.session_state['pending']['model'], 'gemini-3.8-flash')
         self.app.run()
         self.assertEqual(self.app.session_state['model_choice'], 'gemini-3.8-flash')
+
+    def test_flash_timeout_or_token_limit_keeps_checkpoint_and_resume(self):
+        self.click('Example')
+        self.app.selectbox(key='model_choice').select('gemini-3.8-flash').run()
+        self.app.text_input(key='api_key').set_value('fake-key').run()
+        self.app.checkbox(key='online_consent').check().run()
+        self.app.session_state['content'] = 'Keep accepted material'
+        self.app.run()
+        cutoff = {'candidates': [{'finishReason': 'MAX_TOKENS', 'content': {'parts': [{'text': 'Partial lesson'}]}}]}
+        for failure in (CourseError('The engine did not respond within the 180-second connection/read timeout.'), cutoff):
+            # Each attempt starts fresh after the preceding test job finished.
+            with self.subTest(failure=type(failure)), patch('engines.request_json', side_effect=[response(), failure]) as send:
+                self.click('Generate')
+                self.assertEqual(send.call_count, 2)
+            self.assertEqual(self.app.session_state['generation_status']['completed'], 1)
+            self.assertEqual(self.app.session_state['generation_status']['total'], 5)
+            self.assertEqual(len(self.app.session_state['pending']['completed']), 1)
+            self.assertNotIn('Partial lesson', self.app.session_state['pending']['completed'][0])
+            self.assertEqual(self.app.session_state['content'], 'Keep accepted material')
+            with patch('engines.request_json', return_value=response()) as send:
+                self.click('Resume')
+                self.assertEqual(send.call_count, 4)
+                self.assertTrue(all(c.kwargs['timeout'] == 180 for c in send.call_args_list))
+                self.app.run()
+                self.assertEqual(send.call_count, 4)
+            self.assertEqual(self.app.session_state['generation_status']['completed'], 5)
+            self.assertEqual(self.app.session_state['content'], 'Keep accepted material')
 
     def test_direct_generate_use_edit_and_download_survive_rerun(self):
         self.assertEqual(len(self.app.tabs), 0)

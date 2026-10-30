@@ -6,11 +6,11 @@ import re
 
 from course_core import (CourseError, MAX_OUTPUT, analyze_syllabus, bounded_text,
                          course_allocation, make_project, topic_allocation, validate_pending)
-from engines import DEFAULT_GEMINI_MODEL, EngineConfig, generate_course
+from engines import DEFAULT_GEMINI_MODEL, GEMINI_FLASH_MODEL, EngineConfig, generate_course
 from reference_catalog import reference_section, restrict_generated_reference_links
 from lesson_format import validate_lesson
 
-GEMINI_MODELS = (DEFAULT_GEMINI_MODEL, 'gemini-3.8-flash')
+GEMINI_MODELS = (DEFAULT_GEMINI_MODEL, GEMINI_FLASH_MODEL)
 CUSTOM_MODEL = 'Custom model…'
 
 

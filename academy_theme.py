@@ -122,7 +122,7 @@ def streamlit_header():
     """
     return '''<header class="cf-masthead">
     <div class="cf-brand"><span class="cf-logo" aria-hidden="true">🛩️</span>
-    <div><h1>Course Framework</h1><p>Paste the full syllabus → generate course material.</p></div></div>
+    <div><h1>Course Framework</h1><p>Enter a topic or syllabus → generate course material.</p></div></div>
     <svg class="cf-art" viewBox="0 0 160 90" fill="none" aria-hidden="true" focusable="false">
     <rect x="27" y="15" width="65" height="62" rx="7" fill="#fafbfd" stroke="#e4e9f0" transform="rotate(-9 27 15)"/>
     <rect x="48" y="9" width="65" height="70" rx="7" fill="#ffffff" stroke="#e4e9f0"/>

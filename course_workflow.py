@@ -8,7 +8,7 @@ from course_core import (CourseError, MAX_OUTPUT, analyze_syllabus, bounded_text
                          course_allocation, make_project, topic_allocation, validate_pending)
 from engines import DEFAULT_GEMINI_MODEL, GEMINI_FLASH_MODEL, EngineConfig, generate_course
 from reference_catalog import reference_section, restrict_generated_reference_links
-from lesson_format import validate_lesson
+from lesson_format import lesson_review_notes
 
 GEMINI_MODELS = (DEFAULT_GEMINI_MODEL, GEMINI_FLASH_MODEL)
 CUSTOM_MODEL = 'Custom model…'
@@ -18,13 +18,13 @@ def profile(config):
     # No key in the fingerprint. A replacement key for the same engine can resume.
     base = config.base_url.strip().rstrip('/') if config.provider == 'OpenAI-compatible' else ''
     model = '' if config.provider == 'Local template' else config.model.strip().removeprefix('models/')
-    return hashlib.sha256(('syllabus-tables-v4\n' + config.provider + '\n' + model + '\n' + base).encode()).hexdigest()
+    return hashlib.sha256(('module-input-v5\n' + config.provider + '\n' + model + '\n' + base).encode()).hexdigest()
 
 
 def new_job(syllabus, title, config, indices=None):
     plan = analyze_syllabus(syllabus)
     if not plan['topics']:
-        raise CourseError('No modules found. Add lines such as Week 1: Aircraft loads.')
+        raise CourseError('Enter a topic, title or short outline to create a module.')
     selected = list(range(len(plan['topics']))) if indices is None else list(indices)
     job = {'syllabus': syllabus, 'title': title.strip() or plan['metadata'].get('title', 'Untitled Course'),
            'provider': config.provider, 'model': '' if config.provider == 'Local template' else config.model.strip(),
@@ -87,10 +87,15 @@ def advance(job, config, *, transport=None):
     text = generate_course(job['syllabus'], job['title'], config, module_index=index, transport=transport)
     text = restrict_generated_reference_links(remove_video_sections(text), job['syllabus'])
     text = re.sub(r'(?ims)^###\s+References\s*\n.*?(?=^#{1,3}\s|\Z)', '', text)
+    original = text
     text = re.sub(r'(?m)^#{1,2} .+\n?', '', text)
     text = re.sub(r'(?im)^\*\*(?:Week\(s\)|Allocation):\*\*[^\n]*(?:\n|$)', '', text).strip()
+    if not text:
+        text = re.sub(r'(?m)^#{1,2}\s+', '', original).strip()
     if config.provider != 'Local template':
-        validate_lesson(text)
+        notes = lesson_review_notes(text)
+        if notes:
+            text += '\n\n### Review notes\n' + '\n'.join(f'- {note}' for note in notes)
     allocation = (f"**Allocation:** {topic_allocation(topic)}" if 'lecture_hours' in topic or 'lab_hours' in topic
                   else f"**Week(s):** {topic['schedule'] or 'Unassigned'}")
     module = f"## Module {index + 1}: {topic['title']}\n\n{allocation}\n\n{text}\n\n"

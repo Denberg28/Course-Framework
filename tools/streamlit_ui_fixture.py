@@ -24,6 +24,8 @@ def simulated_request(url, headers, payload, *, timeout=60):
                 'maxOutputTokens': 32768, 'thinkingConfig': {'thinkingLevel': 'medium'}}:
             raise engines.CourseError('The 3.8 Flash request did not use its reasoning settings.')
     time.sleep(1.2)
+    if 'drone 101' in payload['contents'][0]['parts'][0]['text']:
+        return response('### Discussion\nIdentify drone components using a supplied diagram.\n\n### Activity\nLabel the diagram and explain each connection.')
     return response()
 
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.8-rc.1 — Create modules from simple topics
+
+- Accept a topic, informal title/list or full syllabus without requiring course codes, Topics/Week labels, outcomes, hours or references. A title-only course becomes one module.
+- Fix the supplied drone 101 example being misread as a course code/title/description with zero topics. Keep the title and create its two numbered topic modules; preserve full AE 416/417 parsing.
+- Keep the requested discussion/activity/five-MCQ layout in the prompt, but save completed nonempty drafts with advisory review notes when formatting differs. Missing layout fields no longer fail generation or trigger paid retries.
+- Preserve original source, supplied references, unassigned hours, accepted material and checkpoints. Empty/failed/truncated responses and credential reflection remain guarded. New parser/prompt jobs use the module-input-v5 profile.
+- Add exact-example, title-only, relaxed-output, native/Streamlit and mobile browser regressions and a documented module creation policy.
+
 ## 0.3.7-rc.1 — Paste and Generate in one click
 
 - Keep Generate enabled while newly pasted textarea text awaits Streamlit commit; its prior disabled state depended on the last server-side module count and prevented the first click. Disable only during generation.

@@ -39,6 +39,17 @@ class DesktopTests(unittest.TestCase):
         self.app.provider_changed()
         self.root.update()
 
+    def test_simple_topic_list_creates_two_native_modules(self):
+        self.app.set_source(Path('examples/drone101-topics.txt').read_text(encoding='utf-8'))
+        self.app.provider.set(PROVIDERS[0])
+        self.app.provider_changed()
+        self.root.update()
+        self.assertEqual(len(self.app.plan['topics']), 2)
+        self.app.start()
+        self.wait_worker()
+        self.assertEqual(len(self.app.job['completed']), 2)
+        self.assertIn('## Module 2: drone schematic', self.app.text(self.app.candidate))
+
     def test_ae417_table_generates_all_thirteen_native_modules(self):
         source = Path('examples/AE417-syllabus.md').read_text(encoding='utf-8')
         self.app.set_source(source)

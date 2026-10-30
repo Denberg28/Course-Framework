@@ -12,6 +12,29 @@ from course_core import (CourseError, SAMPLE, MAX_FILE_BYTES, analyze_syllabus, 
 
 
 class CourseTests(unittest.TestCase):
+    def test_informal_title_and_topic_lists_need_no_formal_syllabus_fields(self):
+        source = Path('examples/drone101-topics.txt').read_text(encoding='utf-8')
+        for variant in (source, source.replace('drone 101', 'Drone 101'),
+                        source.replace('1. ', '- ').replace('2. ', '- '),
+                        source.replace('drone 101', 'Course Name: drone 101')):
+            with self.subTest(source=variant):
+                plan = analyze_syllabus(variant)
+                self.assertEqual(plan['metadata']['title'].lower(), 'drone 101')
+                self.assertNotIn('code', plan['metadata'])
+                self.assertEqual([t['title'] for t in plan['topics']], ['drone component', 'drone schematic'])
+                self.assertEqual(plan['outcomes'], [])
+                self.assertEqual(plan['references'], [])
+                self.assertTrue(all('lecture_hours' not in t and not t['schedule'] for t in plan['topics']))
+
+    def test_single_topic_or_course_title_creates_one_module(self):
+        for source in ('Drone 101', 'drone components', 'Course Name: Drone basics',
+                       'Course Name: Structures\nDescription: A short course'):
+            with self.subTest(source=source):
+                plan = analyze_syllabus(source)
+                self.assertEqual(len(plan['topics']), 1)
+                self.assertTrue(plan['metadata']['title'])
+                self.assertEqual(build_course_markdown(source).count('## Module '), 1)
+
     def test_ae417_table_keeps_thirteen_modules_and_supplied_bibliography(self):
         source = Path('examples/AE417-syllabus.md').read_text(encoding='utf-8')
         plan = analyze_syllabus(source)
@@ -144,8 +167,7 @@ Course Outline:
         indented = analyze_syllabus('Topics:\n  1. Loads\n\tTension and compression\n  2. Inspection')
         self.assertEqual([t['title'] for t in indented['topics']], ['Loads', 'Inspection'])
         self.assertEqual(indented['topics'][0]['subtopics'], ['Tension and compression'])
-        with self.assertRaises(CourseError):
-            build_course_markdown('Course Name: Structures\nDescription: A short course')
+        self.assertIn('## Module 1: Structures', build_course_markdown('Course Name: Structures\nDescription: A short course'))
 
     def test_local_template_covers_topics_without_inventing_lesson_facts(self):
         content = build_course_markdown(SAMPLE)

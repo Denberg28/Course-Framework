@@ -67,6 +67,29 @@ class WorkflowTests(unittest.TestCase):
     def setUp(self):
         self.config = EngineConfig('Google AI Studio (Gemini)', 'fake-secret', 'gemini-3.8-flash')
 
+    def test_simple_drone_outline_creates_two_modules_with_review_notes(self):
+        source = Path('examples/drone101-topics.txt').read_text(encoding='utf-8')
+        job = new_job(source, '', self.config)
+        self.assertEqual(job['title'], 'drone 101')
+        self.assertEqual(job['indices'], [0, 1])
+        prompts = []
+        def send(url, headers, payload):
+            prompts.append(payload)
+            return response('### Discussion\nA draft explanation of drone parts and a guided identification task.')
+        while not is_complete(job):
+            job = advance(job, self.config, transport=send)
+        self.assertEqual(len(prompts), 2)
+        self.assertIn('Missing course metadata, outcomes, hours or references must not prevent drafting',
+                      prompts[0]['systemInstruction']['parts'][0]['text'])
+        text = draft_text(job)
+        self.assertIn('## Module 1: drone component', text)
+        self.assertIn('## Module 2: drone schematic', text)
+        self.assertIn('A draft explanation of drone parts', text)
+        self.assertIn('### Review notes', text)
+        self.assertIn('No references supplied', text)
+        saved = accept_job(make_project(source, '', ''), job)
+        self.assertEqual(load_project(project_bytes(saved))['syllabus'], source)
+
     def test_ae417_generates_every_module_once_and_keeps_table_source(self):
         source = Path('examples/AE417-syllabus.md').read_text(encoding='utf-8')
         prompts = []
@@ -183,12 +206,15 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn('Instructor-supplied aircraft structural manual', text)
         self.assertIn('### References', text)
 
-    def test_missing_sections_and_truncated_output_preserve_checkpoint(self):
+    def test_format_differences_are_review_notes_but_truncation_still_stops(self):
         job = new_job(SAMPLE, '', self.config)
-        for bad in (response('# Too short'), {'candidates': [{'finishReason': 'MAX_TOKENS'}]}):
-            with self.assertRaises(CourseError):
-                advance(job, self.config, transport=lambda *args: bad)
-            self.assertEqual(job['completed'], [])
+        kept = advance(job, self.config, transport=lambda *args: response('# Brief draft'))
+        self.assertEqual(len(kept['completed']), 1)
+        self.assertIn('Brief draft', kept['completed'][0])
+        self.assertIn('### Review notes', kept['completed'][0])
+        with self.assertRaises(CourseError):
+            advance(kept, self.config, transport=lambda *args: {'candidates': [{'finishReason': 'MAX_TOKENS'}]})
+        self.assertEqual(len(kept['completed']), 1)
 
     def test_local_module_generation_never_uses_network(self):
         cfg = EngineConfig()

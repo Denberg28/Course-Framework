@@ -1,6 +1,6 @@
 # Verification and release gates
 
-Target: **0.3.4-rc.1**, baseline `335e718`. Evidence is automated and self-reviewed, with simulated provider responses. Live API and manual Windows/high-DPI/accessibility acceptance remain pending.
+Target: **0.3.5-rc.1**, baseline `e0901c7`. Evidence is automated and self-reviewed, with simulated provider responses. Live API and manual Windows/high-DPI/accessibility acceptance remain pending.
 
 | Gate | Check |
 |---|---|
@@ -60,3 +60,11 @@ Local checks: `node --check tools/capture_streamlit.cjs`, compileall, git diff -
 The scroll viewport must start below the 60 px Streamlit toolbar and end inside the browser viewport, retain a visible gutter, and apply a 56 px minimum WebKit thumb. Test the actual geometry at desktop/mobile sizes and inspect screenshots, including long generated courses. Standard Firefox/OS scrollbar rendering still needs manual acceptance.
 
 Progress must be inside the generation controls above Generate/Resume, not in pre-page callback output. Unit/AppTest coverage checks partial-failure counts, unchanged accepted content, settings persistence and no repeated requests after rerun. The Chromium runner uses the CI-only streamlit_ui_fixture.py entry point, which runs the actual app with delayed simulated provider transport. It verifies the disabled in-flight action and progress placement within the visible viewport on desktop/mobile, and saves generation screenshots alongside the prior navigation/offline-download captures. All provider requests remain simulated; production entry is app.py. Python/Node syntax, whitespace, Linux/Windows/native/browser/package checks must pass for the final candidate commit.
+
+## AE 417 field/value table regression
+
+examples/AE417-syllabus.md reproduces the supplied OJT curriculum, including its title spelling. Before this fix a browser-style tab/space copy detected two modules: the first topic with following numbered rows as subtopics, then Laboratory/Equipment. Corrected Markdown, clipboard tabs/spaces, decorated nonbreaking-space/HTML and imported Word variants must yield identical 13 titles, seven objectives, eight bibliography entries, lecture allocations [3,3,6,6,6,6,3,3,3,6,3,3,3] and declared totals 54/0. Dash/empty module lab cells stay absent. Reversed columns and missing first/second hour cells must not shift values. Plain indented subtopics and AE 416 remain required.
+
+Shared workflow and Streamlit tests simulate all 13 module responses, check exactly 13 requests (also after rerun), progress 13/13, the final heading, source/project preservation and old-contract checkpoint rejection. Windows verifies 13 offline modules in the native worker. Chromium pastes the tab-separated table, checks the summary and completed 13-module Markdown download and captures its course view. Browser offline material is explicitly placeholder content, not live AI teaching-quality evidence.
+
+Local Python 3.12: 69 tests discovered, 59 passed and 10 native-display tests skipped. Final affected GitHub Linux/Windows/native/browser/package checks must pass before prerelease publication. No real credential or paid request is used.

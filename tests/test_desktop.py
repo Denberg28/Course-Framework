@@ -39,6 +39,20 @@ class DesktopTests(unittest.TestCase):
         self.app.provider_changed()
         self.root.update()
 
+    def test_ae417_table_generates_all_thirteen_native_modules(self):
+        source = Path('examples/AE417-syllabus.md').read_text(encoding='utf-8')
+        self.app.set_source(source)
+        self.app.provider.set(PROVIDERS[0])
+        self.app.provider_changed()
+        self.root.update()
+        self.assertEqual(len(self.app.plan['topics']), 13)
+        self.assertIn('54 lecture / 0 lab h', self.app.summary.get())
+        self.app.start()
+        self.wait_worker()
+        self.assertEqual(len(self.app.job['completed']), 13)
+        self.assertIn('## Module 13: Pre-Deployment Seminar and Internship Requirements', self.app.text(self.app.candidate))
+        self.assertEqual(self.app.text(self.app.editor), '')
+
     def test_full_syllabus_retains_hours_in_native_outline_and_generation(self):
         source = Path('examples/AE416-syllabus.txt').read_text(encoding='utf-8')
         self.app.set_source(source)

@@ -12,6 +12,64 @@ from course_core import (CourseError, SAMPLE, MAX_FILE_BYTES, analyze_syllabus, 
 
 
 class CourseTests(unittest.TestCase):
+    def test_ae417_table_keeps_thirteen_modules_and_supplied_bibliography(self):
+        source = Path('examples/AE417-syllabus.md').read_text(encoding='utf-8')
+        plan = analyze_syllabus(source)
+        self.assertEqual(plan['metadata']['code'], 'AE 417')
+        self.assertEqual(plan['metadata']['title'], 'AERONAUTICAL ENGINEERING PRACTIVE (OJT) LECTURE')
+        self.assertTrue(plan['metadata']['description'].startswith('The course consists of a preparatory'))
+        self.assertEqual(plan['metadata']['units'], '3 units lecture, 0 unit laboratory = 3 Units')
+        self.assertEqual(plan['metadata']['weekly_hours'], '3 hours lecture, 0 hours laboratory = 3 Hours')
+        self.assertEqual(plan['metadata']['prerequisite'], 'Fourth Year Standing')
+        self.assertEqual((plan['metadata']['lecture_hours'], plan['metadata']['lab_hours']), (54, 0))
+        self.assertEqual(len(plan['outcomes']), 7)
+        self.assertEqual([t['title'] for t in plan['topics']], [
+            'Internship Orientation and Policies', 'Aviation Industry Overview / Careers / Making Resume',
+            'CAAP Regulations and Airworthiness Requirements', 'Aviation Safety Management System (SMS)',
+            'Quality Assurance and Quality Control Systems', 'Aircraft Maintenance Documentation and Records',
+            'Engineering Ethics and Professional Responsibility', 'Human Factors in Aviation Maintenance',
+            'Occupational Safety and Health Standards', 'Technical Report Writing and Logbook Preparation',
+            'Research Application in Aviation Industry', 'Career Development and Professional Practice',
+            'Pre-Deployment Seminar and Internship Requirements'])
+        self.assertEqual([t['lecture_hours'] for t in plan['topics']], [3, 3, 6, 6, 6, 6, 3, 3, 3, 6, 3, 3, 3])
+        # Empty/dash cells are unspecified per module, not inferred numeric zeroes.
+        self.assertTrue(all(not t['subtopics'] and 'lab_hours' not in t for t in plan['topics']))
+        self.assertEqual(len(plan['references']), 8)
+        self.assertTrue(plan['references'][0].startswith('Kroes,'))
+        self.assertIn('CAAP', plan['references'][4])
+        self.assertFalse(plan['warnings'])
+
+    def test_ae417_clipboard_spaces_entities_and_word_table_match_markdown(self):
+        source = Path('examples/AE417-syllabus.md').read_text(encoding='utf-8')
+        expected = analyze_syllabus(source)
+        rows = [[c.strip() for c in line[1:-1].split('|')] for line in source.splitlines()
+                if not line.startswith('|---')]
+        for separator in ('\t', '  '):
+            with self.subTest(separator=separator):
+                self.assertEqual(analyze_syllabus('\n'.join(separator.join(r) for r in rows)), expected)
+        decorated = source.replace(' | ', '\u00a0 | \u00a0').replace('<br>', '<br />')
+        decorated = decorated.replace('Course Code:', '**Course   Code:**').replace(' | |', ' | &#x20; |')
+        self.assertEqual(analyze_syllabus(decorated), expected)
+        from docx import Document
+        document = Document()
+        table = document.add_table(rows=len(rows), cols=4)
+        for row, values in zip(table.rows, rows):
+            for cell, text in zip(row.cells, values):
+                cell.text = text.replace('<br>', '\n')
+        target = io.BytesIO()
+        document.save(target)
+        self.assertEqual(analyze_syllabus(extract_text('ojt.docx', target.getvalue())), expected)
+
+    def test_hour_cells_stay_in_their_columns_when_empty_or_reversed(self):
+        source = ('Course Name: Table\n| Topic | LAB HRS | LEC HRS |\n|---|---|---|\n'
+                  '| 1. First | | 3 |\n| 2. Second | 2.5 | |\n| 3. Third | – | 6 |\n'
+                  '| 4. Fourth | — | 3 |\nReferences:\nSupplied source')
+        plan = analyze_syllabus(source)
+        self.assertEqual([(t.get('lecture_hours'), t.get('lab_hours')) for t in plan['topics']],
+                         [(3, None), (None, 2.5), (6, None), (3, None)])
+        self.assertTrue(any('no lecture hours' in w for w in plan['warnings']))
+        self.assertTrue(any('no lab hours' in w for w in plan['warnings']))
+
     def test_full_ae416_syllabus_preserves_metadata_outcomes_readings_and_hours(self):
         source = Path('examples/AE416-syllabus.txt').read_text(encoding='utf-8')
         plan = analyze_syllabus(source)
@@ -83,6 +141,9 @@ Course Outline:
             analyze_syllabus('  ')
         self.assertEqual(len(analyze_syllabus('- Introduction\n- Aircraft loads\n- Inspection')['topics']), 3)
         self.assertEqual(len(analyze_syllabus('Course Syllabus\nWeek 1: Loads')['topics']), 1)
+        indented = analyze_syllabus('Topics:\n  1. Loads\n\tTension and compression\n  2. Inspection')
+        self.assertEqual([t['title'] for t in indented['topics']], ['Loads', 'Inspection'])
+        self.assertEqual(indented['topics'][0]['subtopics'], ['Tension and compression'])
         with self.assertRaises(CourseError):
             build_course_markdown('Course Name: Structures\nDescription: A short course')
 

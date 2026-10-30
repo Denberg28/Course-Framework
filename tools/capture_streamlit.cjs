@@ -25,7 +25,7 @@ async function main() {
       if (!ready) await new Promise(r => setTimeout(r, 200));
     }
     assert.ok(ready, 'Streamlit startup deadline');
-    browser = await chromium.launch({ headless: true });
+    browser = await chromium.launch({ headless: true, ignoreDefaultArgs: ['--hide-scrollbars'] });
     const page = await browser.newPage({ viewport: { width: 1366, height: 900 } });
     page.setDefaultTimeout(20000);
     await page.goto('http://127.0.0.1:8507');
@@ -59,10 +59,12 @@ async function main() {
       const shape = await page.evaluate(() => {
         const main = document.querySelector('[data-testid="stMain"]');
         return { overflow: getComputedStyle(main).overflowY, height: main.clientHeight,
-          scrollHeight: main.scrollHeight, width: document.documentElement.scrollWidth, viewport: innerWidth };
+          scrollHeight: main.scrollHeight, width: document.documentElement.scrollWidth, viewport: innerWidth,
+          gutter: main.getBoundingClientRect().width - main.clientWidth };
       });
       assert.equal(shape.overflow, 'scroll');
       assert.ok(shape.scrollHeight > shape.height);
+      assert.ok(shape.gutter > 0, 'Scrollbar has a reserved visible gutter');
       assert.ok(shape.width <= shape.viewport + 1, 'No horizontal page overflow');
     }
     await checkLayout();
@@ -91,6 +93,7 @@ async function main() {
     await settleScroll();
     await checkLayout();
     assert.equal(await page.locator('.cf-art').isVisible(), false);
+    await page.getByTestId('stMain').evaluate(el => el.scrollTo({ top: 0, behavior: 'instant' }));
     await page.screenshot({ path: path.join(target, 'streamlit-input-mobile.png') });
     await page.getByRole('link', { name: 'Course material ↓', exact: true }).click();
     await settleScroll();

@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT), str(ROOT / 'tests')]
 
 import engines
+import hosted_keys
 from test_workflow import response
 
 
@@ -23,4 +24,5 @@ def simulated_request(url, headers, payload):
 
 
 engines.request_json = simulated_request
+hosted_keys.gemini_secret = lambda secrets: 'fake-ui-deployment-key'
 runpy.run_path(str(ROOT / 'app.py'), run_name='__main__')

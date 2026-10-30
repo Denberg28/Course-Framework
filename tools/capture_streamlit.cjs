@@ -94,6 +94,10 @@ async function main() {
     await checkLayout();
     assert.equal(await page.locator('.cf-art').isVisible(), false);
     await page.getByTestId('stMain').evaluate(el => el.scrollTo({ top: 0, behavior: 'instant' }));
+    assert.ok(await page.getByRole('heading', { name: 'Course Framework', exact: true }).evaluate(el => {
+      const toolbar = document.querySelector('[data-testid="stHeader"]');
+      return el.getBoundingClientRect().top >= (toolbar ? toolbar.getBoundingClientRect().bottom : 0);
+    }), 'Mobile masthead clears the Streamlit toolbar');
     await page.screenshot({ path: path.join(target, 'streamlit-input-mobile.png') });
     await page.getByRole('link', { name: 'Course material ↓', exact: true }).click();
     await settleScroll();

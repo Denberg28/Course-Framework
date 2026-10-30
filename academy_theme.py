@@ -97,6 +97,7 @@ def streamlit_css():
     .cf-return {{ font-size: .86rem; }}
     .cf-section-anchor, #course-material {{ scroll-margin-top: 5rem; }}
     @media (max-width: 640px) {{
+        .block-container {{ padding-top: 3rem; }}
         .cf-art {{ display: none; }}
         .cf-logo {{ width: 42px; height: 42px; font-size: 1.55rem; }}
         .cf-brand h1 {{ font-size: 1.4rem !important; }}

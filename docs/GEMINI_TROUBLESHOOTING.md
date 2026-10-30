@@ -2,7 +2,7 @@
 
 The user identified timeout/unfinished-draft symptoms. The exact original error and account-side request trace were not supplied. Code inspection found a fixed 60-second HTTP connection/read timeout and maxOutputTokens 16384 shared by both presets; all non-STOP Gemini outcomes were reported as a combined blocked/output-limit error. Those are confirmed app behaviors, not proof of which condition caused a particular live failure.
 
-Google documents gemini-3.8-flash and the same v1beta models generateContent REST route used by this app. The model defaults to medium thinking and accepts low, medium or high; minimal is unsupported. Thinking counts against the response token ceiling, so exhausting it can produce empty or truncated output.
+Google documents gemini-3.8-flash and the v1beta models generateContent and streamGenerateContent routes. The model defaults to medium thinking and accepts low, medium or high; minimal is unsupported. Thinking counts against the response token ceiling, so exhausting it can produce empty or truncated output.
 
 Version 0.3.6 explicitly retains medium reasoning for demanding work, allows 32768 response tokens including thinking, and applies a 180-second connection/read timeout to this preset. These are application choices within the documented API capabilities, not Google latency guarantees. Lite remains the default with its earlier settings. A larger cap permits more tokens if used and does not establish a fixed or free cost. No automatic retry, continuation, fallback model or source reduction is performed. Existing matching completed modules remain resumable.
 
@@ -26,3 +26,16 @@ Sources checked on 30 October 2026:
 - https://ai.google.dev/api/generate-content
 
 Automated request/error/checkpoint tests demonstrate the code paths, not live model latency, account access or teaching accuracy.
+
+## Continued timeouts: quality-preserving streaming in 0.3.9
+
+The user confirmed that 3.8 must retain its quality-oriented medium reasoning. The app now uses SSE streaming, while preserving medium, the complete syllabus, the existing 600–900-word lesson request and the 32768-token thinking/output allowance. Thought summaries are requested solely as provider activity signals; their content is discarded. Visible progress reports working/received final-text character counts, never model reasoning text. A response can continue beyond 180 seconds overall as chunks arrive; the same timeout still limits a stalled connection/idle read. A fifteen-minute budget is checked between reads, not as a strict whole-course deadline; a blocked read can extend it by up to the socket timeout.
+
+A terminal STOP finishes the module immediately, without waiting for a proxy to close the connection. One request still generates one selected module. An interrupted stream cannot replace accepted material or replay completed modules; a matching saved partial job uses Resume for unfinished work. There is no automatic continuation/retry or quality-reducing model switch.
+
+This change removes the app's full-response buffering path for 3.8. It does not establish the exact account-side cause of earlier timeouts or guarantee first-chunk latency. Google documents streaming and also notes that occasional slowness/timeouts can occur. Unit, simulated browser and real loopback HTTP transport checks are separate from real-key teaching/latency validation. Check v0.3.9 or later in Settings & files to confirm the deployment update.
+
+Additional primary references:
+
+- https://ai.google.dev/gemini-api/docs/generate-content/text-generation
+- https://deepmind.google/models/model-cards/gemini-3-8-flash/

@@ -35,9 +35,13 @@ class EngineTests(unittest.TestCase):
                 settings = send.call_args.args[2]['generationConfig']
                 self.assertEqual(settings['maxOutputTokens'], 32768 if is_flash else 16384)
                 if is_flash:
-                    self.assertEqual(settings['thinkingConfig'], {'thinkingLevel': 'medium'})
+                    self.assertEqual(settings['thinkingConfig'], {'thinkingLevel': 'medium', 'includeThoughts': True})
+                    self.assertIn(':streamGenerateContent?alt=sse', send.call_args.args[0])
+                    self.assertTrue(send.call_args.kwargs['stream'])
+                    self.assertEqual(send.call_args.args[1]['Accept'], 'text/event-stream')
                 else:
                     self.assertNotIn('thinkingConfig', settings)
+                    self.assertNotIn('stream', send.call_args.kwargs)
                 self.assertNotIn('fake-secret', send.call_args.args[0])
 
     def test_extended_timeout_is_applied_once_and_errors_are_distinct(self):

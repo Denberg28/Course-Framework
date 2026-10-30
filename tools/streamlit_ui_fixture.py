@@ -15,14 +15,18 @@ import hosted_keys
 from test_workflow import response
 
 
-def simulated_request(url, headers, payload, *, timeout=60):
+def simulated_request(url, headers, payload, *, timeout=60, stream=False, on_progress=None):
     # No credential, URL or prompt is logged or sent anywhere.
     if not url.startswith('https://generativelanguage.googleapis.com/'):
         raise engines.CourseError('The UI fixture supports simulated Gemini requests only.')
-    if '/gemini-3.8-flash:generateContent' in url:
+    if '/gemini-3.8-flash:' in url:
         if timeout != 180 or payload.get('generationConfig') != {
-                'maxOutputTokens': 32768, 'thinkingConfig': {'thinkingLevel': 'medium'}}:
+                'maxOutputTokens': 32768, 'thinkingConfig': {'thinkingLevel': 'medium', 'includeThoughts': True}} or not stream or ':streamGenerateContent?alt=sse' not in url:
             raise engines.CourseError('The 3.8 Flash request did not use its reasoning settings.')
+        if on_progress:
+            on_progress(0)
+            time.sleep(.35)
+            on_progress(120)
     time.sleep(1.2)
     if 'drone 101' in payload['contents'][0]['parts'][0]['text']:
         return response('### Discussion\nIdentify drone components using a supplied diagram.\n\n### Activity\nLabel the diagram and explain each connection.')

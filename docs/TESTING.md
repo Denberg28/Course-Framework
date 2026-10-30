@@ -1,6 +1,6 @@
 # Verification and release gates
 
-Target: **0.3.8-rc.1**, baseline `632b2ac`. Evidence is automated and self-reviewed, with simulated provider responses. Live API and manual Windows/high-DPI/accessibility acceptance remain pending.
+Target: **0.3.9-rc.1**, baseline `288e56c`. Evidence is automated and self-reviewed, with simulated provider responses. Live API and manual Windows/high-DPI/accessibility acceptance remain pending.
 
 | Gate | Check |
 |---|---|
@@ -71,7 +71,7 @@ Local Python 3.12: 69 tests discovered, 59 passed and 10 native-display tests sk
 
 ## Gemini 3.8 request and failure regression
 
-Verify the real adapter wrapper sends the 3.8 preset and models/ alias to the documented generateContent route with medium thinking, maxOutputTokens 32768 and timeout 180; Lite/custom settings stay unchanged. Mock the HTTP opener (not time.sleep) to assert timeout forwarding, one attempted request, sanitized raw/wrapped timeouts, distinct network and HTTP 504 errors. Known MAX_TOKENS, policy, recitation and continuation reasons must be distinct; unknown provider strings must never leak a credential. Non-STOP partial text is rejected.
+Verify the real adapter wrapper sends the 3.8 preset and models/ alias to the documented streamGenerateContent SSE route with medium thinking, includeThoughts activity, maxOutputTokens 32768 and timeout 180; Lite/custom settings stay unchanged. Mock the HTTP opener (not time.sleep) to assert timeout forwarding, one attempted request, sanitized raw/wrapped timeouts, distinct network and HTTP 504 errors. Known MAX_TOKENS, policy, recitation and continuation reasons must be distinct; unknown provider strings must never leak a credential. Non-STOP partial text is rejected.
 
 The Streamlit 3.8 regression simulates a timeout and MAX_TOKENS after the first completed module. Each failure must leave one checkpoint and accepted text intact; Resume makes exactly four remaining requests with the extended timeout and reruns make none. Existing model selection, Secrets, full-table parsing, teaching validation, export and native tests remain required. Chromium generates 3.8 desktop and Lite mobile through delayed no-network fixtures; the fixture rejects wrong 3.8 payload/timeout settings.
 
@@ -90,3 +90,13 @@ The screenshot source in examples/drone101-topics.txt must yield title drone 101
 Workflow/Streamlit tests generate two completed modules from nonstandard brief responses, retain their text with Review notes, preserve the raw source/project and allow Use draft without demanding missing metadata or MCQs. A provider MAX_TOKENS failure still preserves an earlier checkpoint and stops. Native Windows creates both topics offline. Chromium reproduces the exact informal list on mobile with a deliberately differently headed simulated response, checks 2/2 progress and downloads both module titles plus retained text/review notes. No provider call is made merely because fields are missing.
 
 Local Python 3.12: 80 tests discovered, 69 passed and 11 native-display skips. Final Linux/Windows/native/browser/package checks gate candidate publication. Provider responses are simulated; teaching accuracy and live account performance remain unverified.
+
+## Quality-preserving Gemini 3.8 streaming regression
+
+The request must retain medium reasoning, maxOutputTokens 32768, the complete supplied syllabus and the requested lesson scope. No low-reasoning substitution, compacted syllabus, automatic retry or fallback model is permitted. Stream settings/endpoint/header assertions cover both the preset and models/ alias.
+
+New tests cover fragmented multibyte UTF-8 and CRLF SSE, activity-only thought summaries, completion across a mocked >180-second sequence without a second request, immediate return on STOP while the connection remains open, partial EOF/idle timeout, malformed JSON/UTF-8, sanitized SSE server errors, wire/text/time bounds, credential reflection split across chunks and thought-only output. A local HTTP/1.1 server sends actual chunked SSE and holds the connection open; the real urllib read1 adapter must finish from STOP before the socket timeout. This is a loopback integration test, not a real Google/model latency test.
+
+Checkpoint/resume coverage succeeds once, interrupts the next stream, preserves the first module/accepted text and requests only the unfinished module on manual resume. Browser fixture verifies the 3.8 medium/SSE payload and count-only callback; Chromium waits for Receiving module / characters received above the disabled action, then verifies completion. Existing Lite, consent, Secrets, simple-input, full-table, native and package checks remain gates.
+
+Local Python 3.12: 89 discovered, 78 passed and 11 native-display skips. Final affected GitHub Linux/Windows/native/browser/package checks must pass before publication. No real API key, Google generation, actual long elapsed wait or teaching-quality benchmark is part of CI.

@@ -75,7 +75,7 @@ def draft_text(job):
     return result
 
 
-def advance(job, config, *, transport=None):
+def advance(job, config, *, transport=None, on_progress=None):
     """Return a new checkpoint only after the next module succeeds. Never retry a paid call."""
     job = validate_pending(job)
     if job['profile'] != profile(config):
@@ -84,7 +84,8 @@ def advance(job, config, *, transport=None):
         return job
     index = job['indices'][len(job['completed'])]
     topic = analyze_syllabus(job['syllabus'])['topics'][index]
-    text = generate_course(job['syllabus'], job['title'], config, module_index=index, transport=transport)
+    text = generate_course(job['syllabus'], job['title'], config, module_index=index,
+                           transport=transport, on_progress=on_progress)
     text = restrict_generated_reference_links(remove_video_sections(text), job['syllabus'])
     text = re.sub(r'(?ims)^###\s+References\s*\n.*?(?=^#{1,3}\s|\Z)', '', text)
     original = text

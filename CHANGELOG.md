@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.9-rc.1 — Stream 3.8 modules without reducing reasoning
+
+- Keep 3.8 Flash at medium reasoning with the same full-source lesson prompt and 32768-token allowance. Use streamGenerateContent SSE instead of waiting for one whole JSON response.
+- Receive bounded incremental chunks, use provider thought-summary chunks only for activity and discard their content, and finish immediately on the model finish signal without waiting for a persistent connection to close.
+- Show throttled working/received-character progress above Generate; checkpoint only provider-completed modules and retain earlier success after an interrupted stream. Matching saved jobs remain resumable with no automatic retry, continuation or fallback model.
+- Keep the 180-second connection/idle timeout, bound bytes/text, and check a fifteen-minute response budget between reads. These are not Google latency or teaching-quality guarantees.
+- Add real local HTTP chunked-SSE, fragmented UTF-8, completion, failure, sanitization, bounds and checkpoint/resume tests; browser QA verifies receiving progress. Show the deployed version in Settings & files.
+
 ## 0.3.8-rc.1 — Create modules from simple topics
 
 - Accept a topic, informal title/list or full syllabus without requiring course codes, Topics/Week labels, outcomes, hours or references. A title-only course becomes one module.

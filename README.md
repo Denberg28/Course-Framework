@@ -6,7 +6,7 @@ Paste a syllabus, choose an agent model, and generate modules with presentation/
 
 1. **Paste the full course syllabus** as supplied: course heading, description, units, outcomes, lecture/lab topic table, and readings. The included [AE 416 example](examples/AE416-syllabus.txt) is detected as five modules, three outcomes, 36 lecture hours and 54 laboratory hours without relabeling it. Labelled and weekly outlines remain supported.
 2. **Choose an agent model** and enter its API key if not configured in Streamlit Secrets. **Gemini 3.5 Flash-Lite** (`gemini-3.5-flash-lite`) is the default; choose **3.8 Flash** (`gemini-3.8-flash`) for demanding work, or select/type a custom model ID. Availability and quotas depend on your provider account.
-3. Select **all modules** or **one module**, allow sending the syllabus to the agent, then **Generate**. Each selected module uses one request; there is no automatic paid retry.
+3. Select **all modules** or **one module**, allow sending the syllabus to the agent, then **Generate**. Pasted text is applied by the click; a separate Ctrl+Enter/Tab step is not required. Each selected module uses one request; there is no automatic paid retry.
 4. **Review** the generated material below the syllabus and **Download Markdown** directly, including an unfinished draft if needed. **Use draft** accepts a complete course for editing/package export; existing accepted material stays intact until then.
 5. **Save project** to keep the syllabus, accepted edits, and unfinished modules. **Export course** produces a ZIP with Markdown, a collapsible HTML lesson presentation, the source syllabus, and a reopenable project.
 

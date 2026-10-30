@@ -18,6 +18,30 @@ class StreamlitTests(unittest.TestCase):
         self.click('Example')
         self.app.selectbox(key='provider').select('Local template').run()
 
+    def test_generate_accepts_newly_pasted_text_in_the_same_click(self):
+        self.assertFalse(self.app.button(key='generate_button').disabled)
+        self.app.text_input(key='api_key').set_value('fake-key').run()
+        self.app.checkbox(key='online_consent').check().run()
+        source = Path('examples/AE416-syllabus.txt').read_text(encoding='utf-8')
+        # No .run() between pasting and clicking: the button must commit both.
+        self.app.text_area(key='source').set_value(source)
+        with patch('engines.request_json', return_value=response()) as send:
+            self.click('Generate')
+            self.assertEqual(send.call_count, 5)
+            self.assertTrue(all(source in call.args[2]['contents'][0]['parts'][0]['text']
+                                for call in send.call_args_list))
+            self.app.run()
+            self.assertEqual(send.call_count, 5)
+        self.assertEqual(self.app.session_state['generation_status']['completed'], 5)
+
+    def test_empty_generate_explains_what_to_paste_without_sending(self):
+        with patch('engines.request_json', side_effect=AssertionError('must not send')) as send:
+            self.click('Generate')
+            send.assert_not_called()
+        self.assertTrue(any('Paste your syllabus' in error.value for error in self.app.error))
+        self.assertFalse(self.app.button(key='generate_button').disabled)
+        self.assertFalse(self.app.session_state['generation_requested'])
+
     def test_ae417_clipboard_table_generates_thirteen_modules(self):
         self.sample_local()
         self.click('Generate')

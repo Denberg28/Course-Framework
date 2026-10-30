@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.3-rc.1 — Default model, branding and navigation
+
+- Default Streamlit, native Windows and shared engine configuration to Gemini 3.5 Flash-Lite; retain 3.8 Flash for demanding work and custom model IDs. Preserve explicit session/job model choices.
+- Restore the original airplane mark and favicon; add a compact white/navy/gold header with a static lesson-paper illustration that hides on narrow screens.
+- Add a visible vertical page scrollbar with a stable gutter, Syllabus/Course material jump links, a return link and smooth scrolling that respects reduced-motion settings.
+- Keep full-width syllabus/materials, syllabus-based references, contact hours and the teaching format intact.
+- Add model-routing regression coverage and a Chromium CI gate for actual desktop/mobile navigation, overflow, offline generation/Markdown download and screenshot capture.
+
 ## 0.3.2-rc.1 — Syllabus references
 
 - Replace the automatic agency/university/publisher catalog with the bibliography supplied in the syllabus, regardless of subject or source domain.

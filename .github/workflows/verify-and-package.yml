@@ -38,8 +38,35 @@ jobs:
           path: ui-review/*.png
           if-no-files-found: error
 
+  streamlit-browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: python -m pip install -r requirements.txt
+      - name: Install browser capture tooling
+        run: |
+          npm install --prefix "$RUNNER_TEMP/course-ui" --no-save --package-lock=false playwright@1.62.1
+          node "$RUNNER_TEMP/course-ui/node_modules/playwright/cli.js" install --with-deps chromium --only-shell
+      - name: Check and capture Streamlit desktop/mobile
+        env:
+          NODE_PATH: ${{ runner.temp }}/course-ui/node_modules
+        run: node tools/capture_streamlit.cjs streamlit-review
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: CourseFramework-Streamlit-review
+          path: streamlit-review/*
+          if-no-files-found: warn
+
   windows-package:
-    needs: verify
+    needs: [verify, streamlit-browser]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4

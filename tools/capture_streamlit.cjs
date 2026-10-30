@@ -1,0 +1,107 @@
+/* Browser smoke and visual capture; no API credential or online generation. */
+const { chromium } = require('playwright');
+const { spawn } = require('node:child_process');
+const fs = require('node:fs');
+const path = require('node:path');
+const assert = require('node:assert/strict');
+
+async function main() {
+  const target = path.resolve(process.argv[2] || 'streamlit-review');
+  fs.mkdirSync(target, { recursive: true });
+  const server = spawn(process.env.COURSE_UI_PYTHON || 'python', [
+    '-m', 'streamlit', 'run', 'app.py', '--server.headless', 'true',
+    '--server.port', '8507', '--server.address', '127.0.0.1', '--browser.gatherUsageStats', 'false'
+  ], { cwd: path.resolve(__dirname, '..'), stdio: ['ignore', 'pipe', 'pipe'] });
+  let logs = '';
+  server.stdout.on('data', x => { logs += x.toString(); });
+  server.stderr.on('data', x => { logs += x.toString(); });
+  let browser;
+  try {
+    const deadline = Date.now() + 30000;
+    let ready = false;
+    while (Date.now() < deadline && !ready) {
+      if (server.exitCode !== null) throw Error('Streamlit exited: ' + logs);
+      try { ready = (await fetch('http://127.0.0.1:8507/_stcore/health')).ok; } catch (_) {}
+      if (!ready) await new Promise(r => setTimeout(r, 200));
+    }
+    assert.ok(ready, 'Streamlit startup deadline');
+    browser = await chromium.launch({ headless: true });
+    const page = await browser.newPage({ viewport: { width: 1366, height: 900 } });
+    page.setDefaultTimeout(20000);
+    await page.goto('http://127.0.0.1:8507');
+    await page.getByRole('heading', { name: 'Course Framework', exact: true }).waitFor();
+    const select = label => page.getByTestId('stSelectbox').filter({ has: page.getByText(label, { exact: true }) });
+    async function settleScroll() {
+      await page.evaluate(async () => {
+        const main = document.querySelector('[data-testid="stMain"]');
+        let previous = main.scrollTop, stable = 0;
+        for (let i = 0; i < 120 && stable < 6; i++) {
+          await new Promise(requestAnimationFrame);
+          stable = Math.abs(main.scrollTop - previous) < .1 ? stable + 1 : 0;
+          previous = main.scrollTop;
+        }
+      });
+    }
+    async function choose(label, value) {
+      await select(label).getByRole('combobox').click();
+      await page.getByRole('option', { name: value, exact: true }).click();
+      await page.waitForFunction(({ label, value }) => [...document.querySelectorAll('[data-testid="stSelectbox"]')]
+        .some(e => e.textContent.includes(label) && e.textContent.includes(value)), { label, value });
+    }
+    assert.ok((await select('Agent model').innerText()).includes('gemini-3.5-flash-lite'));
+    await choose('Agent model', 'gemini-3.8-flash');
+    await choose('Agent model', 'gemini-3.5-flash-lite');
+    await page.getByRole('textbox', { name: 'Syllabus', exact: true }).fill(
+      fs.readFileSync(path.resolve(__dirname, '../examples/AE416-syllabus.txt'), 'utf8'));
+    await page.getByRole('textbox', { name: 'Syllabus', exact: true }).press('Tab');
+    await page.getByText('36 lecture h · 54 lab h · 90 total h', { exact: true }).waitFor();
+    async function checkLayout() {
+      const shape = await page.evaluate(() => {
+        const main = document.querySelector('[data-testid="stMain"]');
+        return { overflow: getComputedStyle(main).overflowY, height: main.clientHeight,
+          scrollHeight: main.scrollHeight, width: document.documentElement.scrollWidth, viewport: innerWidth };
+      });
+      assert.equal(shape.overflow, 'scroll');
+      assert.ok(shape.scrollHeight > shape.height);
+      assert.ok(shape.width <= shape.viewport + 1, 'No horizontal page overflow');
+    }
+    await checkLayout();
+    await page.screenshot({ path: path.join(target, 'streamlit-input-desktop.png') });
+    await page.getByTestId('stExpander').filter({ has: page.getByText('Settings & files', { exact: true }) }).locator('summary').click();
+    await choose('Provider', 'Local template');
+    await page.getByTestId('stExpander').filter({ has: page.getByText('Settings & files', { exact: true }) }).locator('summary').click();
+    await page.getByRole('button', { name: 'Generate', exact: true }).click();
+    await page.getByRole('button', { name: 'Use draft', exact: true }).waitFor();
+    await page.getByRole('link', { name: 'Course material ↓', exact: true }).click();
+    await page.waitForFunction(() => document.querySelector('[data-testid="stMain"]').scrollTop > 100);
+    await settleScroll();
+    await page.screenshot({ path: path.join(target, 'streamlit-course-desktop.png') });
+    const assessment = page.getByTestId('stExpander').filter({ has: page.getByText('Assessment', { exact: true }) }).first();
+    assert.equal(await assessment.evaluate(el => {
+      const details = el.matches('details') ? el : el.querySelector('details');
+      return details ? details.open : null;
+    }), false);
+    const downloadEvent = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Download Markdown', exact: true }).click();
+    const download = await downloadEvent;
+    await download.saveAs(path.join(target, 'offline-draft.md'));
+    assert.ok(fs.readFileSync(path.join(target, 'offline-draft.md'), 'utf8').includes('Paler-Calmorin'));
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole('link', { name: 'Syllabus', exact: true }).click();
+    await settleScroll();
+    await checkLayout();
+    assert.equal(await page.locator('.cf-art').isVisible(), false);
+    await page.screenshot({ path: path.join(target, 'streamlit-input-mobile.png') });
+    await page.getByRole('link', { name: 'Course material ↓', exact: true }).click();
+    await settleScroll();
+    await page.screenshot({ path: path.join(target, 'streamlit-course-mobile.png') });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    assert.equal(await page.getByTestId('stMain').evaluate(el => getComputedStyle(el).scrollBehavior), 'auto');
+    assert.equal(await page.getByTestId('stException').count(), 0);
+    console.log('Browser smoke passed: model selection, offline generation/download, navigation, desktop/mobile overflow, reduced motion.');
+  } finally {
+    if (browser) await browser.close();
+    server.kill('SIGTERM');
+  }
+}
+main().catch(error => { console.error(error); process.exitCode = 1; });

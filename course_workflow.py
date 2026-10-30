@@ -18,7 +18,7 @@ def profile(config):
     # No key in the fingerprint. A replacement key for the same engine can resume.
     base = config.base_url.strip().rstrip('/') if config.provider == 'OpenAI-compatible' else ''
     model = '' if config.provider == 'Local template' else config.model.strip().removeprefix('models/')
-    return hashlib.sha256(('syllabus-references-v3\n' + config.provider + '\n' + model + '\n' + base).encode()).hexdigest()
+    return hashlib.sha256(('syllabus-tables-v4\n' + config.provider + '\n' + model + '\n' + base).encode()).hexdigest()
 
 
 def new_job(syllabus, title, config, indices=None):

@@ -10,7 +10,7 @@ import re
 import tempfile
 import zipfile
 
-VERSION = "0.3.4-rc.1"
+VERSION = "0.3.5-rc.1"
 MAX_FILE_BYTES = 8 * 1024 * 1024
 MAX_TEXT = 180_000
 MAX_OUTPUT = 400_000
@@ -81,7 +81,7 @@ def extract_text(name: str, data: bytes) -> str:
                 if node.tag == qn("w:p"):
                     parts.append(Paragraph(node, document).text)
                 elif node.tag == qn("w:tbl"):
-                    parts.extend(" | ".join(c.text for c in row.cells)
+                    parts.extend('| ' + " | ".join(c.text.replace('\n', '<br>') for c in row.cells) + ' |'
                                  for row in Table(node, document).rows)
             text = "\n".join(parts)
         elif suffix == ".pdf":
@@ -117,6 +117,8 @@ META = {
     "duration": "duration", "weeks": "duration", "contact hours": "hours",
     "total hours": "hours", "hours": "hours", "prerequisite": "prerequisite",
     "pre-requisite": "prerequisite", "units": "units", "instructor": "instructor",
+    "number of units for lecture and laboratory": "units",
+    "number of contact hours per week": "weekly_hours",
 }
 SECTION = {
     "learning outcomes": "outcomes", "course outcomes": "outcomes",
@@ -129,11 +131,14 @@ SECTION = {
     "required readings": "references", "recommended readings": "references",
     "textbooks and references": "references",
     "suggested textbooks and references": "references",
+    "aviation regulations and standards": "references",
     "assessment": "other", "assessments": "other", "grading": "other",
     "grading system": "other", "course policies": "other",
+    "laboratory/equipment": "other",
 }
 WEEK = re.compile(r"^(weeks?|modules?|units?|lessons?)\s+(\d+(?:\s*[-–]\s*\d+)?)\s*[:.)-]?\s*(.*)$", re.I)
-HOUR_ROW = re.compile(r"^(.+?)\s+(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)$")
+HOUR_VALUE = re.compile(r"\d+(?:\.\d+)?")
+HOUR_ROW = re.compile(r"^(.+?)\s+(\d+(?:\.\d+)?|[-–—])(?:\s+(\d+(?:\.\d+)?|[-–—]))?$")
 OUTCOME_INTRO = re.compile(r"(?:after|upon)\s+(?:completing|completion\s+of).*\b(?:able\s+to|can)\s*:?$", re.I)
 
 
@@ -170,6 +175,27 @@ def clean_item(text):
     return re.sub(r"^\s*(?:[-*•]\s+|\d+(?:\.\d+)+(?:[.)])?\s+|\d+[.)]\s+)", "", text).strip()
 
 
+def syllabus_cell(text):
+    """Normalize copied table decoration without changing the saved source."""
+    text = re.sub(r'<br\s*/?>', ' ', html.unescape(text), flags=re.I)
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text[2:-2].strip() if text.startswith('**') and text.endswith('**') else text
+
+
+def syllabus_cells(raw):
+    """Keep empty column positions in Markdown/Word and clipboard TSV rows."""
+    if '|' in raw:
+        row = raw.strip()
+        if row.startswith('|') and row.endswith('|'):
+            row = row[1:-1]
+        cells = re.split(r'(?<!\\)\|', row)
+    elif '\t' in raw:
+        cells = raw.split('\t')
+    else:
+        return None
+    return [syllabus_cell(cell) for cell in cells]
+
+
 def analyze_syllabus(syllabus: str) -> dict:
     bounded_text(syllabus, "Syllabus")
     if not syllabus.strip():
@@ -179,9 +205,22 @@ def analyze_syllabus(syllabus: str) -> dict:
     pending = None
     table_headers = None
     hour_columns = None
+    hour_indices = None
     explicit_outline = bool(re.search(r"^\s*(?:#+\s*)?(?:weeks?|modules?|units?|lessons?)\s+\d", syllabus, re.I | re.M))
     for raw in syllabus.splitlines():
-        line = raw.strip().strip("# ").strip()
+        cells = syllabus_cells(raw)
+        if cells is not None:
+            if all(not c or re.fullmatch(r'[:\-\s]+', c) for c in cells):
+                continue
+            occupied = [c for c in cells if c]
+            # Field/value rows and blank leading cells must not become module titles.
+            field = occupied[0].lower().rstrip(':').strip()
+            if len(occupied) > 1 and (field in META or field in SECTION):
+                line = occupied[0].rstrip(':') + ': ' + ' '.join(occupied[1:])
+            else:
+                line = ' '.join(occupied)
+        else:
+            line = syllabus_cell(raw.strip().strip('# '))
         if not line:
             continue
         if line.lower() in {"course syllabus", "syllabus"}:
@@ -194,11 +233,12 @@ def analyze_syllabus(syllabus: str) -> dict:
             section = "metadata"
             table_headers = None
             hour_columns = None
+            hour_indices = None
             continue
         heading = line.lower().rstrip(":").strip().strip("*")
         # Common curriculum sheets use plain course headings and an outcome sentence.
         if OUTCOME_INTRO.search(line):
-            section, pending, table_headers, hour_columns = 'outcomes', None, None, None
+            section, pending, table_headers, hour_columns, hour_indices = 'outcomes', None, None, None, None
             continue
         if not result['metadata'] and not result['topics'] and re.fullmatch(r'[A-Za-z]{2,8}[- ]+\d{2,4}[A-Za-z]?', line):
             result['metadata']['code'] = line
@@ -219,13 +259,28 @@ def analyze_syllabus(syllabus: str) -> dict:
         lab = re.search(r'\b(?:lab|laboratory)\s*(?:hrs?|hours?)\b', flat, re.I)
         if lecture and lab and not re.search(r'\d', flat):
             hour_columns = ('lecture_hours', 'lab_hours') if lecture.start() < lab.start() else ('lab_hours', 'lecture_hours')
+            hour_indices = ([next(i for i, c in enumerate(cells) if re.search(pattern, c, re.I))
+                             for pattern in (r'\b(?:lec|lecture)\s*(?:hrs?|hours?)\b',
+                                             r'\b(?:lab|laboratory)\s*(?:hrs?|hours?)\b')]
+                            if cells is not None else None)
             section, pending, table_headers = 'topics', None, None
             continue
         if hour_columns:
-            row = HOUR_ROW.fullmatch(flat)
-            if row:
-                title = clean_item(row[1]).rstrip(':').strip()
-                hours = {field: float(number) for field, number in zip(hour_columns, (row[2], row[3]))}
+            title, hours = '', {}
+            if cells is not None and hour_indices is not None:
+                title = ' '.join(cells[:min(hour_indices)]).strip()
+                values = [cells[i] if i < len(cells) else '' for i in hour_indices]
+                if all(not v or v in {'-', '–', '—'} or HOUR_VALUE.fullmatch(v) for v in values):
+                    hours = {field: float(v) for field, v in zip(('lecture_hours', 'lab_hours'), values)
+                             if v is not None and HOUR_VALUE.fullmatch(v)}
+            else:
+                row = HOUR_ROW.fullmatch(flat)
+                if row:
+                    title = row[1]
+                    hours = {field: float(v) for field, v in zip(hour_columns, (row[2], row[3]))
+                             if v is not None and HOUR_VALUE.fullmatch(v)}
+            if title and hours:
+                title = clean_item(title).rstrip(':').strip()
                 if title.lower() in {'total', 'totals'}:
                     result['metadata'].update(hours)
                     result['metadata']['hours'] = f"{sum(hours.values()):g}"
@@ -233,28 +288,25 @@ def analyze_syllabus(syllabus: str) -> dict:
                     result['topics'].append({'title': title, 'schedule': '', 'subtopics': [], **hours})
                 continue
             if heading == 'none':
-                section, hour_columns = 'other', None
+                section, hour_columns, hour_indices = 'other', None, None
                 continue
         if heading in SECTION:
-            section, pending, table_headers, hour_columns = SECTION[heading], None, None, None
+            section, pending, table_headers, hour_columns, hour_indices = SECTION[heading], None, None, None, None
             continue
         if separator and normalized in SECTION:
             section, pending = SECTION[normalized], None
+            table_headers, hour_columns, hour_indices = None, None, None
             if not value.strip():
                 continue
             line = value.strip()
+            if line.lower() in SECTION or section == 'other':
+                continue
         if pending:
             result["metadata"][pending] = line
             pending = None
             continue
-        if "|" in line:
-            cells = [c.strip() for c in line.strip("|").split("|")]
+        if cells is not None:
             if cells[0].lower() in {"field", "fields"}:
-                continue
-            if all(re.fullmatch(r"[:\-\s]+", c) for c in cells):
-                continue
-            if len(cells) >= 2 and cells[0].lower() in META:
-                result["metadata"][META[cells[0].lower()]] = cells[1]
                 continue
             if any(c.lower() in {"topic", "topics", "content", "week", "weeks"} for c in cells):
                 table_headers, section = [c.lower() for c in cells], "topics"
@@ -277,7 +329,9 @@ def analyze_syllabus(syllabus: str) -> dict:
         elif section in {"outcomes", "references"}:
             result[section].append(clean_item(line))
         elif section == "topics":
-            if (raw.startswith((" ", "\t")) or re.match(r"^\d+\.\d+", line) or
+            plain_indent = (raw.startswith((' ', '\t')) and not re.match(r'^\d+[.)]\s', line)
+                            and (cells is None or ('|' not in raw and sum(bool(c) for c in cells) == 1)))
+            if (plain_indent or re.match(r"^\d+\.\d+", line) or
                     (explicit_outline and re.match(r"^[-*•]\s", line))) and result["topics"]:
                 result["topics"][-1]["subtopics"].append(clean_item(line))
             else:

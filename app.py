@@ -36,6 +36,7 @@ def clear_generation_status():
 def queue_generation():
     # Callbacks only queue work. Progress is rendered in the authoring controls.
     state.generation_requested = True
+    state.replace_course = False
     state.notice = ''
 
 
@@ -151,7 +152,6 @@ def generate():
             job = advance(job, cfg)
             state.pending = job  # Commit each successful module before requesting the next.
             status['completed'] = len(job['completed'])
-            state.replace_course = False
         status['text'] = f"Draft ready · {status['completed']}/{status['total']} complete"
         bar.progress(1.0, text=status['text'])
     except CourseError as error:

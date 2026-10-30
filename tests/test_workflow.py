@@ -67,6 +67,31 @@ class WorkflowTests(unittest.TestCase):
     def setUp(self):
         self.config = EngineConfig('Google AI Studio (Gemini)', 'fake-secret', 'gemini-3.8-flash')
 
+    def test_ae417_generates_every_module_once_and_keeps_table_source(self):
+        source = Path('examples/AE417-syllabus.md').read_text(encoding='utf-8')
+        prompts = []
+        def transport(url, headers, payload):
+            prompts.append(payload['contents'][0]['parts'][0]['text'])
+            return response()
+        job = new_job(source, '', self.config)
+        self.assertEqual(job['indices'], list(range(13)))
+        while not is_complete(job):
+            job = advance(job, self.config, transport=transport)
+        self.assertEqual(len(prompts), 13)
+        self.assertTrue(all(source in prompt for prompt in prompts))
+        text = draft_text(job)
+        self.assertEqual(text.count('## Module '), 13)
+        self.assertIn('## Module 13: Pre-Deployment Seminar and Internship Requirements', text)
+        self.assertIn('| Selected total | | 54 | 0 |', text)
+        saved = accept_job(make_project(source, '', ''), job)
+        self.assertEqual(load_project(project_bytes(saved))['syllabus'], source)
+        # Old checkpoints must not resume with a changed parser interpretation.
+        import hashlib
+        old_profile = hashlib.sha256(('syllabus-references-v3\n' + self.config.provider + '\n' +
+                                      self.config.model + '\n').encode()).hexdigest()
+        partial = {**job, 'completed': job['completed'][:1], 'profile': old_profile}
+        self.assertFalse(can_resume(partial, source, '', self.config))
+
     def test_full_syllabus_hours_reach_prompt_draft_and_project_export(self):
         source = Path('examples/AE416-syllabus.txt').read_text(encoding='utf-8')
         prompts = []

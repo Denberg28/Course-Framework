@@ -142,8 +142,35 @@ async function main() {
     await page.screenshot({ path: path.join(target, 'streamlit-course-mobile.png') });
     await page.emulateMedia({ reducedMotion: 'reduce' });
     assert.equal(await page.getByTestId('stMain').evaluate(el => getComputedStyle(el).scrollBehavior), 'auto');
+    // Regression: real browser table pastes contain blank first columns and tabs.
+    await page.setViewportSize({ width: 1366, height: 900 });
+    await page.getByRole('link', { name: 'Syllabus', exact: true }).click();
+    const ojt = fs.readFileSync(path.resolve(__dirname, '../examples/AE417-syllabus.md'), 'utf8')
+      .trim().split('\n').filter(line => !line.startsWith('|---'))
+      .map(line => line.slice(1, -1).split('|').map(cell => cell.trim()).join('\t')).join('\n');
+    await page.getByRole('textbox', { name: 'Syllabus', exact: true }).fill(ojt);
+    await page.getByRole('textbox', { name: 'Syllabus', exact: true }).press('Tab');
+    await page.getByText(/AE 417.*13 modules · 7 outcomes/).waitFor();
+    await page.getByText('54 lecture h · 0 lab h · 54 total h', { exact: true }).waitFor();
+    await page.getByTestId('stExpander').filter({ has: page.getByText('Settings & files', { exact: true }) }).locator('summary').click();
+    await choose('Provider', 'Local template');
+    await page.getByTestId('stExpander').filter({ has: page.getByText('Settings & files', { exact: true }) }).locator('summary').click();
+    await page.getByRole('button', { name: 'Generate', exact: true }).click();
+    await page.getByText('Draft ready · 13/13 complete', { exact: true }).waitFor();
+    const ojtDownloadEvent = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Download Markdown', exact: true }).click();
+    const ojtDownload = await ojtDownloadEvent;
+    await ojtDownload.saveAs(path.join(target, 'ae417-offline-draft.md'));
+    const ojtDraft = fs.readFileSync(path.join(target, 'ae417-offline-draft.md'), 'utf8');
+    assert.equal((ojtDraft.match(/^## Module /gm) || []).length, 13);
+    assert.ok(ojtDraft.includes('## Module 13: Pre-Deployment Seminar and Internship Requirements'));
+    assert.ok(ojtDraft.includes('| Selected total | | 54 | 0 |'));
+    await page.getByRole('link', { name: 'Course material ↓', exact: true }).click();
+    await settleScroll();
+    await checkLayout();
+    await page.screenshot({ path: path.join(target, 'streamlit-ae417-course-desktop.png') });
     assert.equal(await page.getByTestId('stException').count(), 0);
-    console.log('Browser smoke passed: model selection, offline download, simulated in-flight progress, scrollbar/toolbar geometry, desktop/mobile navigation, reduced motion.');
+    console.log('Browser smoke passed: model selection, offline download, simulated in-flight progress, scrollbar/toolbar geometry, desktop/mobile navigation, reduced motion, AE 417 clipboard table and all 13 modules.');
   } finally {
     if (browser) await browser.close();
     server.kill('SIGTERM');

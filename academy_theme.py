@@ -62,7 +62,7 @@ def streamlit_css():
     return f'''<style>
     .stApp {{ background: {PAPER}; color: {INK}; }}
     [data-testid="stSidebar"] {{ background: {FIELD}; border-right: 1px solid {LINE}; }}
-    .block-container {{ padding-top: 1.5rem; padding-bottom: 2rem; }}
+    .block-container {{ max-width: 1100px; padding-top: 1.5rem; padding-bottom: 2rem; }}
     h1 {{ font-size: 1.65rem !important; font-weight: 500 !important; }}
     h2,h3 {{ font-weight: 500 !important; }}
     [data-testid="stCaptionContainer"] {{ color: {MUTED}; }}

@@ -13,7 +13,7 @@ Reference: `Denberg28/Aeronautical-Open-Academy` main, `MainActivity.java` and `
 | Selection tint | `#fff7df` |
 | Desktop font | Segoe UI, 10 pt body, 11 pt section, 18 pt app title |
 
-Windows uses one split workspace, with model/key/scope controls beside a draft or accepted course. Settings and File contain secondary options; Preview opens a safe HTML lesson presentation with collapsible assessments, letter keys, and references. Streamlit uses one page, a model dropdown, and Settings & files; import/outline review are optional. Draft acceptance remains explicit so new output never silently replaces accepted teaching material.
+Windows uses one split workspace, with model/key/scope controls beside a draft or accepted course. Settings and File contain secondary options; Preview opens a safe HTML lesson presentation with collapsible assessments, letter keys, and references. Streamlit follows the original vertical allocation: full-width syllabus above compact model/key/Generate controls and full-width course material below (1100 px maximum reading width). Settings & files contains optional scope/import/provider controls; Outline remains optional. Save/Markdown/Export stay above the preview. Course overview collapses so modules remain the reading focus. Draft acceptance remains explicit so new output never silently replaces accepted teaching material.
 
 `academy_theme.py` centralizes the palette. The old left rail, four workflow pages, standalone engine page, revision instruction row, and duplicate export buttons were removed. Ctrl+O/Ctrl+S remain. Agent selection is a single model choice per generation, not an autonomous multi-agent team.
 

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.1-rc.1 — Full syllabus and screen allocation
+
+- Restore the original Streamlit reading order: paste the full syllabus, Generate, preview materials below at full content width; move optional scope to Settings & files.
+- Recognize plain course code/title, course-completion outcome sentences, units/weekly hours/standing, singular Textbook headings, and lecture/lab tables copied with tabs, spaces or pipes.
+- Preserve exact module lecture/lab allocations, supplied totals, outcomes and readings in prompts, course overview, headings and exports; flag inconsistent totals without inventing weeks.
+- Include the supplied AE 416 syllabus as the Example and a regression fixture: five modules, three outcomes, 36 lecture/54 lab hours.
+- Add direct draft/accepted Markdown downloads and keep Save/Export above the preview. Collapse course overview while keeping the teaching sequence visible.
+- Retain sequential generation, failure/resume checkpoints, explicit accepted-course replacement, hosted Secrets and the five-MCQ teaching format. Start fresh generation for the updated parsing/prompt contract.
+
 ## 0.3.0-rc.1 — Focused teaching modules
 
 - Remove video suggestions and links from new module generation.

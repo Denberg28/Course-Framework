@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 from streamlit.testing.v1 import AppTest
 from course_core import CourseError
@@ -30,7 +31,26 @@ class StreamlitTests(unittest.TestCase):
         self.app.text_area(key='content').set_value('# My edits').run()
         self.app.run()
         self.assertEqual(self.app.session_state['content'], '# My edits')
-        self.assertEqual(len(self.app.get('download_button')), 2)
+        self.assertEqual(len(self.app.get('download_button')), 3)
+
+    def test_full_syllabus_direct_paste_has_full_width_output_and_correct_allocation(self):
+        source = Path('examples/AE416-syllabus.txt').read_text(encoding='utf-8')
+        self.app.text_area(key='source').set_value(source).run()
+        self.app.selectbox(key='provider').select('Local template').run()
+        self.assertIn('36 lecture h · 54 lab h · 90 total h', ' '.join(c.value for c in self.app.caption))
+        # Main-page blocks are sequential, never columns reserving space beside output.
+        blocks = [b for b in self.app.main.children.values() if b.type == 'flex_container']
+        self.assertEqual(len(blocks), 2)
+        self.assertTrue(blocks[0].text_area)
+        self.assertFalse(blocks[1].text_area)
+        self.assertTrue(all(b.proto.flex_container.direction == b.proto.flex_container.VERTICAL for b in blocks))
+        self.click('Generate')
+        self.assertEqual(self.app.session_state['pending']['indices'], [0, 1, 2, 3, 4])
+        self.assertEqual(self.app.session_state['pending']['title'], 'RESEARCH METHODS AND APPLICATION')
+        self.assertEqual(self.app.session_state['source'], source)
+        self.assertTrue(any(b.label == 'Download Markdown' for b in self.app.get('download_button')))
+        self.click('Use draft')
+        self.assertIn('| Selected total | | 36 | 54 |', self.app.session_state['content'])
 
     def test_assessment_and_answer_key_are_collapsed(self):
         self.click('Example')

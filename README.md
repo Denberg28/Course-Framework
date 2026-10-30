@@ -4,10 +4,10 @@ Paste a syllabus, choose an agent model, and generate modules with presentation/
 
 ## Use it
 
-1. **Paste** your syllabus. Topics such as `Week 1: Aircraft loads` give the most predictable module boundaries.
+1. **Paste the full course syllabus** as supplied: course heading, description, units, outcomes, lecture/lab topic table, and readings. The included [AE 416 example](examples/AE416-syllabus.txt) is detected as five modules, three outcomes, 36 lecture hours and 54 laboratory hours without relabeling it. Labelled and weekly outlines remain supported.
 2. **Choose an agent model** and enter its API key if not configured in Streamlit Secrets. Gemini presets are `gemini-3.8-flash` and `gemini-3.5-flash-lite`; select/type a custom model ID when needed. Availability and quotas depend on your provider account.
 3. Select **all modules** or **one module**, allow sending the syllabus to the agent, then **Generate**. Each selected module uses one request; there is no automatic paid retry.
-4. **Review → Use draft.** Accepted material stays intact until you accept a complete draft. Edit the accepted course if needed.
+4. **Review** the generated material below the syllabus and **Download Markdown** directly, including an unfinished draft if needed. **Use draft** accepts a complete course for editing/package export; existing accepted material stays intact until then.
 5. **Save project** to keep the syllabus, accepted edits, and unfinished modules. **Export course** produces a ZIP with Markdown, a collapsible HTML lesson presentation, the source syllabus, and a reopenable project.
 
 If a request fails, completed modules remain in the pending draft. With the same syllabus, title, module selection, provider, model, and endpoint, **Generate/Resume** continues from the next unfinished module. Reopen a saved project, re-enter the session key, and configure the original compatible endpoint if applicable. Changing the engine or syllabus starts a new draft; previously accepted content remains safe. Streamlit work is session-local until downloaded; Windows work is held in memory until saved. Save before closing or reloading.
@@ -17,6 +17,8 @@ A Windows **Pause** finishes and retains the current module, then stops before t
 Each new module follows **Discussion and presentation → Activity → Assessment → Answer key → References**. Discussion contains an introduction, 3–5 teaching/discussion segments, a worked example, and a summary. The activity includes steps, a deliverable, and suggested time. Assessment contains exactly five multiple-choice questions numbered 1–5, each with A–D options; the key contains five numbered letters such as `1. B`. Streamlit collapses assessment, answer key, and references separately. Windows **Preview** opens a standalone HTML presentation with the same collapsible sections; the native editor remains Markdown.
 
 Video suggestions and links are removed from new module creation. Topic-scoped references come from a catalog of checked official FAA, CAAP and EASA locations plus relevant MIT/OpenStax publisher/university sources. Source locations were checked on 29 October 2026. This validates source authenticity/location, not AI-generated facts, answers, regulatory applicability, or the current text of a rule. Catalog entries are metadata rather than retrieved textbook text. Check the applicable document, chapter, revision, jurisdiction, and institutional syllabus before teaching. Unrelated subjects fall back to the syllabus-supplied readings rather than forced aviation references.
+
+Lecture/lab tables pasted with tabs, spaces or pipes retain topic hours in the outline, generation prompt, module headings and exported Markdown. Units, weekly hours, standing requirement, outcomes and syllabus readings are retained; conflicting totals produce an outline warning rather than being silently corrected. Hours alone do not imply a week schedule. The prompt asks the model to scope discussion/lab activities to these allocations, but the app does not verify whether content fills every contact hour.
 
 Output validation checks the presentation subsections, discussion length, the five A–D question structures, and the five-letter answer key. This is structural validation, not pedagogical or factual approval. Offline mode produces explicit placeholders, including questions and answer letters that an instructor must complete; it never invents a correct answer.
 
@@ -30,7 +32,7 @@ One workspace contains the syllabus and agent controls beside the draft/course e
 
 ## Streamlit
 
-Deployment configuration: repository **Denberg28/Course-Framework**, branch **main**, entrypoint **app.py**, Python **3.12**. The browser interface has one page with no workflow tabs; Settings & files contains import/open/provider controls. This repository does not establish or verify a public deployment.
+Deployment configuration: repository **Denberg28/Course-Framework**, branch **main**, entrypoint **app.py**, Python **3.12**. The browser interface restores the original top-to-bottom allocation: full-width syllabus input, compact model/key and Generate controls, then a full-width materials preview. The reading area is capped at 1100 px. Settings & files contains import/open/provider and optional module scope; all modules are selected by default. Course overview, assessment, key and references collapse separately; save/download actions stay above the preview. This repository does not establish or verify a public deployment.
 
 You can configure a deployment-owned Gemini key under **Manage app → Settings → Secrets**:
 

@@ -1,8 +1,9 @@
-"""One-page Streamlit authoring: paste, choose an agent, generate, review, save."""
+"""Full-width Streamlit authoring: paste the full syllabus, generate, preview below."""
+from pathlib import Path
 import streamlit as st
 
 from academy_theme import streamlit_css
-from course_core import (CourseError, SAMPLE, VERSION, analyze_syllabus, export_bundle,
+from course_core import (CourseError, VERSION, analyze_syllabus, course_allocation, export_bundle,
                          extract_text, load_project, make_project, project_bytes)
 from engines import EngineConfig, PROVIDERS
 from hosted_keys import gemini_secret
@@ -56,8 +57,9 @@ def selected_indices():
 def example():
     if state.source.strip() and not state.get('replace_source', False):
         return notify('Select Replace syllabus before loading over existing text.', True)
-    state.source, state.course_title = SAMPLE, ''
-    notify('Example loaded.')
+    state.source = (Path(__file__).parent / 'examples' / 'AE416-syllabus.txt').read_text(encoding='utf-8')
+    state.course_title = ''
+    notify('AE 416 example loaded. Generate materials from the full syllabus.')
 
 
 def import_source():
@@ -138,6 +140,10 @@ def use_draft():
 
 def render_course(text):
     for part in presentation_parts(text):
+        if not part['title']:
+            with st.expander('Course overview', expanded=False):
+                st.markdown(part['body'], unsafe_allow_html=False)
+            continue
         if part['title']:
             st.markdown(part['title'])
         st.markdown(part['body'], unsafe_allow_html=False)
@@ -153,15 +159,29 @@ def render_course(text):
 
 
 st.title('Course Framework')
-st.caption('Syllabus → discussion, activity, assessment.')
+st.caption('Paste the full syllabus → generate course material.')
 if state.notice:
     (st.error if state.notice_error else st.success)(state.notice)
 
-left, right = st.columns([2, 3], gap='large')
-with left:
-    st.text_area('Syllabus', key='source', height=280, max_chars=180000,
-                 placeholder='Paste your syllabus here…\n\nWeek 1: Topic\nWeek 2: Topic')
-    agent, key = st.columns([1, 1])
+# Keep the original reading order: full-width input, compact controls, output below.
+with st.container(key='syllabus_input'):
+    st.text_area('Syllabus', key='source', height=240, max_chars=180000,
+                 placeholder='Paste the full course syllabus: course details, outcomes, topic/hour table, and references.')
+    plan, count = None, 0
+    try:
+        if state.source.strip():
+            plan = analyze_syllabus(state.source)
+            count = len(plan['topics'])
+            st.caption(f"{plan['metadata'].get('code', '')} · {plan['metadata'].get('title', 'Course')} · {count} modules · {len(plan['outcomes'])} outcomes")
+            metadata = plan['metadata']
+            if 'lecture_hours' in metadata and 'lab_hours' in metadata:
+                st.caption(f"{metadata['lecture_hours']:g} lecture h · {metadata['lab_hours']:g} lab h · {metadata.get('hours', '—')} total h")
+    except CourseError as error:
+        st.error(str(error))
+    scope_options = [-1, *range(count)]
+    if state.get('module_scope', -1) not in scope_options:
+        state.module_scope = -1
+    agent, key = st.columns(2)
     options = ([*GEMINI_MODELS, CUSTOM_MODEL] if state.provider == PROVIDERS[1] else
                ['Offline template'] if state.provider == PROVIDERS[0] else [CUSTOM_MODEL])
     if state.model_choice not in options:
@@ -179,54 +199,56 @@ with left:
         key.text_input('API key', type='password', key='api_key')
     if state.model_choice == CUSTOM_MODEL:
         st.text_input('Model ID', key='custom_model', placeholder='Provider model ID')
+    if state.provider != PROVIDERS[0]:
+        st.checkbox('Send syllabus to this agent (fees/quota may apply)', key='online_consent')
+    try:
+        resumable = bool(count) and can_resume(state.pending, state.source, state.course_title, config(), selected_indices())
+        st.button('Resume' if resumable else 'Generate', type='primary', on_click=generate, disabled=not count, width='stretch')
+    except CourseError as error:
+        st.error(str(error))
     with st.expander('Settings & files'):
         st.selectbox('Provider', PROVIDERS, key='provider', on_change=provider_changed)
         if state.provider == PROVIDERS[2]:
             st.text_input('API base URL', key='endpoint', on_change=lambda: state.update(online_consent=False))
         st.text_input('Title (optional)', key='course_title')
+        if count:
+            st.selectbox('Modules', scope_options, key='module_scope',
+                         format_func=lambda i: f'All modules ({count})' if i == -1 else f"{i + 1}. {plan['topics'][i]['title']}")
         if not hosted_key:
             st.button('Clear key', on_click=lambda: state.update(api_key=''))
         st.file_uploader('Import syllabus', type=['txt', 'md', 'docx', 'pdf'], key='syllabus_file')
         st.checkbox('Replace syllabus', key='replace_source')
         a, b = st.columns(2)
         a.button('Import', on_click=import_source)
-        b.button('Example', on_click=example)
+        b.button('Example', on_click=example, help='Load the complete AE 416 syllabus.')
         st.file_uploader('Open project', type=['json'], key='project_file')
         st.checkbox('Replace project', key='replace_project')
         st.button('Open', on_click=open_project)
-        st.caption('Credentials are excluded from projects. Save a project to keep your course and unfinished modules.')
-    count = 0
-    try:
-        if state.source.strip():
-            plan = analyze_syllabus(state.source)
-            count = len(plan['topics'])
-            st.caption(f"{count} modules · {len(plan['outcomes'])} outcomes")
-            with st.expander('Outline'):
-                for i, topic in enumerate(plan['topics'], 1):
-                    st.write(f"{i}. {topic['title']} · {topic['schedule'] or 'Week unassigned'}")
-                for warning in plan['warnings']:
-                    st.caption(warning)
-        scope_options = [-1, *range(count)]
-        if state.get('module_scope', -1) not in scope_options:
-            state.module_scope = -1
-        if count:
-            st.selectbox('Modules', scope_options, key='module_scope',
-                         format_func=lambda i: f'All modules ({count})' if i == -1 else f"{i + 1}. {plan['topics'][i]['title']}")
-        if state.provider != PROVIDERS[0]:
-            st.checkbox('Send syllabus to this agent (fees/quota may apply)', key='online_consent')
-        resumable = bool(count) and can_resume(state.pending, state.source, state.course_title, config(), selected_indices())
-        requests = count if state.get('module_scope', -1) == -1 else 1
-        if resumable:
-            requests -= len(state.pending['completed'])
-        st.button('Resume' if resumable else 'Generate', type='primary', on_click=generate, disabled=not count, width='stretch')
-        if count and state.provider != PROVIDERS[0]:
-            st.caption(f'{requests} module request(s) · completed modules are kept if a request fails.')
-    except CourseError as error:
-        st.error(str(error))
+        st.caption('Save project keeps accepted material and unfinished modules. Credentials are excluded.')
+    if plan:
+        with st.expander('Outline'):
+            st.markdown(course_allocation(plan))
+            for outcome in plan['outcomes']:
+                st.caption(outcome)
+            for warning in plan['warnings']:
+                st.caption(warning)
 
-with right:
-    st.subheader('Course')
+st.divider()
+with st.container(key='course_output'):
+    st.subheader('Course material')
     job = state.pending
+    if state.source or state.content or job:
+        try:
+            saved = project()
+            a, b, c = st.columns(3)
+            a.download_button('Save project', project_bytes(saved), 'course-project.json', 'application/json', width='stretch')
+            markdown = draft_text(job) if job else state.content
+            b.download_button('Download Markdown', markdown, 'course-material-draft.md' if job else 'course-material.md',
+                              'text/markdown', disabled=not markdown, width='stretch')
+            c.download_button('Export course', export_bundle({**saved, 'pending': None}), 'course-package.zip',
+                              'application/zip', disabled=not state.content, width='stretch')
+        except CourseError as error:
+            st.error(str(error))
     if job:
         st.caption(f"Draft · {len(job['completed'])}/{len(job['indices'])} modules · {job['model'] or 'Offline template'}")
         if is_complete(job):
@@ -237,18 +259,9 @@ with right:
     elif state.content:
         render_course(state.content)
     else:
-        st.caption('Paste a syllabus and generate your first draft.')
+        st.caption('Paste a full syllabus and select Generate. Discussion, activity and assessment appear here.')
     if state.content:
         with st.expander('Edit course' if not job else 'Accepted course'):
             st.text_area('Course Markdown', key='content', height=360, max_chars=400000)
-    if state.source or state.content or job:
-        st.divider()
-        try:
-            saved = project()
-            a, b = st.columns(2)
-            a.download_button('Save project', project_bytes(saved), 'course-project.json', 'application/json', width='stretch')
-            b.download_button('Export course', export_bundle({**saved, 'pending': None}), 'course-package.zip',
-                              'application/zip', disabled=not state.content, width='stretch')
-            st.caption('Review facts, official references, and answer keys before teaching. Save project also keeps unfinished drafts.')
-        except CourseError as error:
-            st.error(str(error))
+    if job or state.content:
+        st.caption('Review facts, references and answer keys before teaching. Save project keeps unfinished drafts.')

@@ -1,6 +1,7 @@
 import json
 import io
 import zipfile
+from pathlib import Path
 import unittest
 from unittest.mock import patch
 
@@ -65,6 +66,35 @@ def response(text=MODULE):
 class WorkflowTests(unittest.TestCase):
     def setUp(self):
         self.config = EngineConfig('Google AI Studio (Gemini)', 'fake-secret', 'gemini-3.8-flash')
+
+    def test_full_syllabus_hours_reach_prompt_draft_and_project_export(self):
+        source = Path('examples/AE416-syllabus.txt').read_text(encoding='utf-8')
+        prompts = []
+        def transport(url, headers, payload):
+            prompts.append(payload['contents'][0]['parts'][0]['text'])
+            return response()
+        job = new_job(source, '', self.config)
+        while not is_complete(job):
+            job = advance(job, self.config, transport=transport)
+        self.assertEqual(len(prompts), 5)
+        self.assertTrue(all(source in prompt for prompt in prompts))
+        self.assertIn('"lecture_hours": 6.0, "lab_hours": 6.0', prompts[0])
+        self.assertIn('"lecture_hours": 8.0, "lab_hours": 15.0', prompts[-1])
+        text = draft_text(job)
+        self.assertEqual(text.count('## Module '), 5)
+        self.assertIn('Lecture: 8 h · Lab: 15 h', text)
+        self.assertIn('| Selected total | | 36 | 54 |', text)
+        self.assertIn('Paler-Calmorin, Laurentina.', text)
+        self.assertIn('Know how to collect, evaluate, and transform data', text)
+        saved = accept_job(make_project(source, '', ''), job)
+        self.assertEqual(load_project(project_bytes(saved))['syllabus'], source)
+        with zipfile.ZipFile(io.BytesIO(export_bundle(saved))) as archive:
+            self.assertEqual(archive.read('syllabus.txt').decode(), source)
+            self.assertIn(b'Lecture: 8 h', archive.read('course.md'))
+        cfg = EngineConfig()
+        local = advance(new_job(source, '', cfg, [4]), cfg)
+        self.assertEqual(draft_text(local).count('**Allocation:**'), 1)
+        self.assertIn('[Add instructor-verified', draft_text(local))
 
     def test_partial_job_roundtrip_resumes_only_failed_module(self):
         calls = []

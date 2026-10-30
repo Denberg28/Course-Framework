@@ -135,6 +135,8 @@ def open_project():
 def generate():
     state.generation_status = {'completed': 0, 'total': 0, 'text': '', 'error': ''}
     try:
+        if not state.source.strip():
+            raise CourseError('Paste your syllabus, then select Generate.')
         cfg = config()
         if cfg.provider != PROVIDERS[0] and not state.online_consent:
             raise CourseError('Allow sending the syllabus to the selected agent first.')
@@ -252,7 +254,8 @@ with st.container(key='syllabus_input'):
                     render_generation_status()
             st.button('Generating…' if state.generation_requested else 'Resume' if resumable else 'Generate',
                       key='generate_button', type='primary', on_click=queue_generation,
-                      disabled=not count or state.generation_requested, width='stretch')
+                      # Pasted textarea text is committed by this click; count may still be stale.
+                      disabled=state.generation_requested, width='stretch')
             run_generation = state.generation_requested
     except CourseError as error:
         st.error(str(error))

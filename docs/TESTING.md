@@ -1,6 +1,6 @@
 # Verification and release gates
 
-Target: **0.3.6-rc.1**, baseline `15a723b`. Evidence is automated and self-reviewed, with simulated provider responses. Live API and manual Windows/high-DPI/accessibility acceptance remain pending.
+Target: **0.3.7-rc.1**, baseline `0f9d233`. Evidence is automated and self-reviewed, with simulated provider responses. Live API and manual Windows/high-DPI/accessibility acceptance remain pending.
 
 | Gate | Check |
 |---|---|
@@ -76,3 +76,9 @@ Verify the real adapter wrapper sends the 3.8 preset and models/ alias to the do
 The Streamlit 3.8 regression simulates a timeout and MAX_TOKENS after the first completed module. Each failure must leave one checkpoint and accepted text intact; Resume makes exactly four remaining requests with the extended timeout and reruns make none. Existing model selection, Secrets, full-table parsing, teaching validation, export and native tests remain required. Chromium generates 3.8 desktop and Lite mobile through delayed no-network fixtures; the fixture rejects wrong 3.8 payload/timeout settings.
 
 Local Python 3.12: 73 tests discovered, 63 passed and 10 native-display skips; compileall, Node syntax and whitespace checks are required. Final GitHub Linux/Windows/native/browser/package gates must pass before publication. No real model response, paid generation, key-specific availability or actual 180-second elapsed wait is claimed by simulated tests.
+
+## Direct paste-to-Generate regression
+
+On the deployed baseline, filling the source left Generate disabled and displayed Press Ctrl+Enter to apply; applying the textarea then enabled it. The updated action must be enabled before the first paste, submit the focused new text in the first click and remain disabled only while busy. AppTest batches set_value(source) and click(Generate) without an intermediate run, verifies all five full-source module requests and no repeat on rerun. Empty Generate must show the paste instruction and send nothing. Existing no-consent/key/Secrets protections remain required.
+
+Chromium now consents to the no-network fixture before pasting AE 416, then its very next action is Generate without Tab/Ctrl+Enter; all five modules must complete. A later AE 417 clipboard table replaces the earlier source and generates all 13 offline modules by the same direct click. Existing busy/progress placement, model selection, desktop/mobile layout, downloads and native checks remain gates. Local Python 3.12: 75 tests discovered, 65 passed, 10 native-display skips. Final Windows/native/browser/package results must pass before candidate publication. Provider responses remain simulated.

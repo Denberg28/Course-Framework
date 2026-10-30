@@ -1,9 +1,9 @@
-# Course Framework 0.3.6-rc.1 — Gemini 3.8 reasoning requests
+# Course Framework 0.3.7-rc.1 — Fix the disabled Generate button after paste
 
-Investigating reported timeout/unfinished-draft symptoms found a shared 60-second HTTP timeout, a 16384-token response cap and a combined blocked/output-limit error. The 3.8 model ID and REST route match Google's documentation; the exact cause of an earlier account-side failure remains unverified.
+Pasting a syllabus could leave Generate disabled because Streamlit had not yet applied the textarea text and the server still saw zero modules. Users had to blur the field or press Ctrl+Enter before the button became usable.
 
-The 3.8 Flash preset now explicitly uses medium reasoning, a 32768-token response ceiling including thinking, and a 180-second connection/read timeout. Lite remains the default with unchanged limits. The larger cap allows more tokens when used; it is not a cost or latency guarantee.
+Generate now remains available so its click submits the freshly pasted syllabus directly. It is still disabled while generating. An empty click shows a clear paste instruction and makes no provider request. Online consent and key validation remain required; completed modules, accepted material, selected models and 3.8 timeout improvements are retained.
 
-Errors distinguish client timeout/network failure, provider HTTP 503/504, token exhaustion, policy blocks, recitation and continuation. Partial modules are discarded, completed modules and accepted courses are kept, and matching jobs resume without replaying completed requests. There are no automatic retries, continuation calls or fallback model changes. Save projects before refreshing or rebooting Streamlit.
+Save your project before refreshing the Streamlit app. Paste the syllabus, select the model, check Send syllabus to this agent, then Generate. For an older unreloaded session, Ctrl+Enter applies the text as an immediate workaround.
 
-Publication requires Linux/Windows/native tests, Chromium desktop/mobile and 3.8/Lite simulated-generation checks, Windows build and packaged startup. All provider tests are simulated; no live key/account latency or teaching-quality validation is claimed. See docs/GEMINI_TROUBLESHOOTING.md for investigation evidence and recovery. This remains an unsigned prerelease; extract the entire Windows ZIP before running CourseFramework.exe.
+Publication requires Linux/Windows/native tests, Chromium same-click paste/generation, desktop/mobile progress/navigation/download checks, Windows packaging and packaged startup. Tests use simulated providers and no real key. This remains an unsigned prerelease; extract the whole Windows ZIP before running CourseFramework.exe. Live provider access/latency and teaching accuracy require separate validation.

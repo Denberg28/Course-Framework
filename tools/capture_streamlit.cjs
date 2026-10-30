@@ -51,9 +51,14 @@ async function main() {
     assert.ok((await select('Agent model').innerText()).includes('gemini-3.5-flash-lite'));
     await choose('Agent model', 'gemini-3.8-flash');
     await choose('Agent model', 'gemini-3.5-flash-lite');
+    assert.equal(await page.getByRole('button', { name: 'Generate', exact: true }).isEnabled(), true);
+    await page.getByText('Send syllabus to this agent (fees/quota may apply)', { exact: true }).click();
+    await page.waitForFunction(() => document.querySelector('input[aria-label="Send syllabus to this agent (fees/quota may apply)"]')?.checked);
     await page.getByRole('textbox', { name: 'Syllabus', exact: true }).fill(
       fs.readFileSync(path.resolve(__dirname, '../examples/AE416-syllabus.txt'), 'utf8'));
-    await page.getByRole('textbox', { name: 'Syllabus', exact: true }).press('Tab');
+    // First action after paste: no Tab, Ctrl+Enter or separate apply step.
+    await page.getByRole('button', { name: 'Generate', exact: true }).click();
+    await page.getByText('Draft ready · 5/5 complete', { exact: true }).waitFor();
     await page.getByText('36 lecture h · 54 lab h · 90 total h', { exact: true }).waitFor();
     async function checkLayout() {
       const shape = await page.evaluate(() => {
@@ -150,15 +155,14 @@ async function main() {
     const ojt = fs.readFileSync(path.resolve(__dirname, '../examples/AE417-syllabus.md'), 'utf8')
       .trim().split('\n').filter(line => !line.startsWith('|---'))
       .map(line => line.slice(1, -1).split('|').map(cell => cell.trim()).join('\t')).join('\n');
-    await page.getByRole('textbox', { name: 'Syllabus', exact: true }).fill(ojt);
-    await page.getByRole('textbox', { name: 'Syllabus', exact: true }).press('Tab');
-    await page.getByText(/AE 417.*13 modules · 7 outcomes/).waitFor();
-    await page.getByText('54 lecture h · 0 lab h · 54 total h', { exact: true }).waitFor();
     await page.getByTestId('stExpander').filter({ has: page.getByText('Settings & files', { exact: true }) }).locator('summary').click();
     await choose('Provider', 'Local template');
     await page.getByTestId('stExpander').filter({ has: page.getByText('Settings & files', { exact: true }) }).locator('summary').click();
+    await page.getByRole('textbox', { name: 'Syllabus', exact: true }).fill(ojt);
     await page.getByRole('button', { name: 'Generate', exact: true }).click();
     await page.getByText('Draft ready · 13/13 complete', { exact: true }).waitFor();
+    await page.getByText(/AE 417.*13 modules · 7 outcomes/).waitFor();
+    await page.getByText('54 lecture h · 0 lab h · 54 total h', { exact: true }).waitFor();
     const ojtDownloadEvent = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Download Markdown', exact: true }).click();
     const ojtDownload = await ojtDownloadEvent;
@@ -172,7 +176,7 @@ async function main() {
     await checkLayout();
     await page.screenshot({ path: path.join(target, 'streamlit-ae417-course-desktop.png') });
     assert.equal(await page.getByTestId('stException').count(), 0);
-    console.log('Browser smoke passed: model selection, offline download, simulated in-flight progress, scrollbar/toolbar geometry, desktop/mobile navigation, reduced motion, AE 417 clipboard table and all 13 modules.');
+    console.log('Browser smoke passed: direct first-click paste/generation, model selection, offline download, simulated in-flight progress, scrollbar/toolbar geometry, desktop/mobile navigation, reduced motion, AE 417 clipboard table and all 13 modules.');
   } finally {
     if (browser) await browser.close();
     server.kill('SIGTERM');

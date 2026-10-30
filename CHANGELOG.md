@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.7-rc.1 — Paste and Generate in one click
+
+- Keep Generate enabled while newly pasted textarea text awaits Streamlit commit; its prior disabled state depended on the last server-side module count and prevented the first click. Disable only during generation.
+- Validate empty input after the click and show a clear paste instruction without making a provider request. Keep online consent, selected scope, key validation and busy protection intact.
+- Add same-click paste/submit and no-network empty-submit regressions. Chromium now generates from a focused, unapplied paste without Tab/Ctrl+Enter, including an AE 417 table over an earlier draft.
+
 ## 0.3.6-rc.1 — Gemini 3.8 reasoning request reliability
 
 - Give the 3.8 Flash preset a 180-second connection/read timeout instead of the shared 60 seconds, explicit medium reasoning and a 32,768-token ceiling including thinking. Lite and custom/compatible models retain their prior limits.

@@ -62,7 +62,7 @@ def streamlit_css():
     return f'''<style>
     .stApp {{ background: {PAPER}; color: {INK}; }}
     [data-testid="stSidebar"] {{ background: {FIELD}; border-right: 1px solid {LINE}; }}
-    .block-container {{ max-width: 1100px; padding-top: 1.5rem; padding-bottom: 2rem; }}
+    .block-container {{ max-width: 1100px; padding-top: .5rem; padding-bottom: 2rem; }}
     h1 {{ font-size: 1.65rem !important; font-weight: 500 !important; }}
     h2,h3 {{ font-weight: 500 !important; }}
     [data-testid="stCaptionContainer"] {{ color: {MUTED}; }}
@@ -70,13 +70,18 @@ def streamlit_css():
     button[data-baseweb="tab"][aria-selected="true"] {{ background: {WARM}; color: {INK}; }}
     [data-baseweb="tab-highlight"] {{ background: {GOLD}; }}
     [data-testid="stMain"] {{
+        margin-top: 3.75rem; height: calc(100dvh - 3.75rem);
+        max-height: calc(100dvh - 3.75rem); min-height: 0;
         overflow-y: scroll; scrollbar-gutter: stable; scroll-behavior: smooth;
         scrollbar-width: auto; scrollbar-color: {MUTED} {FIELD};
     }}
-    [data-testid="stMain"]::-webkit-scrollbar {{ width: 12px; }}
-    [data-testid="stMain"]::-webkit-scrollbar-track {{ background: {FIELD}; }}
+    @supports selector(::-webkit-scrollbar) {{
+        [data-testid="stMain"] {{ scrollbar-color: auto; scrollbar-width: auto; }}
+    }}
+    [data-testid="stMain"]::-webkit-scrollbar {{ width: 16px; }}
+    [data-testid="stMain"]::-webkit-scrollbar-track {{ background: {LINE}; border-left: 1px solid {LINE}; }}
     [data-testid="stMain"]::-webkit-scrollbar-thumb {{
-        background: {MUTED}; border: 3px solid {FIELD}; border-radius: 8px;
+        background: {MUTED}; border: 3px solid {LINE}; border-radius: 8px; min-height: 56px;
     }}
     [data-testid="stMain"]::-webkit-scrollbar-thumb:hover {{ background: {INK}; }}
     .cf-masthead {{ display: flex; align-items: center; justify-content: space-between;
@@ -95,9 +100,9 @@ def streamlit_css():
     .cf-nav a:hover, .cf-return:hover {{ color: {INK}; text-decoration: underline; }}
     .cf-nav a:focus-visible, .cf-return:focus-visible {{ outline: 2px solid {INK}; outline-offset: 4px; }}
     .cf-return {{ font-size: .86rem; }}
-    .cf-section-anchor, #course-material {{ scroll-margin-top: 5rem; }}
+    .cf-section-anchor, #course-material {{ scroll-margin-top: 1rem; }}
+    .st-key-generation_status [data-testid="stProgress"] {{ margin-bottom: .25rem; }}
     @media (max-width: 640px) {{
-        .block-container {{ padding-top: 3rem; }}
         .cf-art {{ display: none; }}
         .cf-logo {{ width: 42px; height: 42px; font-size: 1.55rem; }}
         .cf-brand h1 {{ font-size: 1.4rem !important; }}

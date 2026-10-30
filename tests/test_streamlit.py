@@ -116,11 +116,31 @@ class StreamlitTests(unittest.TestCase):
             self.assertEqual(send.call_count, 2)
         self.assertEqual(len(self.app.session_state['pending']['completed']), 1)
         self.assertEqual(self.app.session_state['content'], '')
+        self.assertEqual(self.app.session_state['generation_status']['completed'], 1)
+        self.assertEqual(self.app.session_state['generation_status']['total'], 5)
+        self.assertIn('Stopped', self.app.session_state['generation_status']['text'])
         with patch('engines.request_json', return_value=response()) as send:
             self.click('Resume')
             self.assertEqual(send.call_count, 4)
         self.click('Use draft')
         self.assertIn('## Module 5:', self.app.session_state['content'])
+
+    def test_progress_is_in_generation_controls_and_rerun_does_not_repeat_requests(self):
+        self.click('Example')
+        self.app.text_input(key='api_key').set_value('fake-key').run()
+        self.app.checkbox(key='online_consent').check().run()
+        with patch('engines.request_json', return_value=response()) as send:
+            self.click('Generate')
+            self.app.run()
+            self.assertEqual(send.call_count, 5)
+        self.assertFalse(self.app.session_state['generation_requested'])
+        self.assertEqual(self.app.session_state['generation_status']['text'], 'Draft ready · 5/5 complete')
+        controls = next(b for b in self.app.main if getattr(b, 'type', '') == 'flex_container'
+                        and b.proto.id.endswith('-generation_controls'))
+        self.assertEqual(len(controls.get('progress')), 1)
+        self.assertEqual(len(self.app.main.get('progress')), 1)
+        self.app.text_area(key='source').set_value('Week 1: Changed topic').run()
+        self.assertIsNone(self.app.session_state['generation_status'])
 
     def test_hosted_gemini_secret_used_without_display_or_session_copy(self):
         from course_core import project_bytes, make_project

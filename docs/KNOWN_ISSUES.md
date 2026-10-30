@@ -17,3 +17,5 @@
 
 - **Screen verification:** Chromium CI checks actual Streamlit desktop/mobile overflow, navigation, offline generation/download and reduced motion, retaining screenshots for review. Local Chromium downloads were unavailable. Native/browser captures and automated checks do not establish manual screen-reader, high-DPI or OS-specific overlay-scrollbar acceptance. The browser/OS can still control how scrollbars are displayed.
 - **Default model:** new sessions/startup and returning to Gemini default to 3.5 Flash-Lite; existing session selections and restored jobs keep their original model. Reload/reboot the app to start fresh defaults. Model availability, quotas and actual latency remain provider-dependent.
+
+- **Scrolling/progress:** the page track is placed below the fixed Streamlit toolbar; Chromium/WebKit gets a contrasting track and minimum thumb, while Firefox/OS rendering can differ. Progress reports completed modules, not token-by-token completion within an active request. A slow first request can correctly remain at 0 completed. Save project still keeps the last successful module checkpoint.

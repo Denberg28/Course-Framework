@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.4-rc.1 — Visible scrollbar and generation progress
+
+- Start the page scroll container below Streamlit's fixed toolbar, bound it to the remaining viewport, and use a contrasting 16 px WebKit track with a 56 px minimum thumb. Preserve native scrolling and reduced-motion support.
+- Move API generation out of the pre-page callback. Queue once, then render real completed-module progress immediately above Generate/Resume; disable the action while running and keep stopped/ready status there.
+- Register all settings/editor widgets before the completion rerun so provider, scope and accepted material survive; reruns do not repeat API requests.
+- Extend browser QA with delayed no-network provider responses to capture actual in-flight progress on desktop/mobile and check toolbar/scroll-track geometry.
+
 ## 0.3.3-rc.1 — Default model, branding and navigation
 
 - Default Streamlit, native Windows and shared engine configuration to Gemini 3.5 Flash-Lite; retain 3.8 Flash for demanding work and custom model IDs. Preserve explicit session/job model choices.

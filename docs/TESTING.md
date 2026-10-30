@@ -1,6 +1,6 @@
 # Verification and release gates
 
-Target: **0.3.3-rc.1**, baseline `ef63f8f`. Evidence is automated and self-reviewed, with simulated provider responses. Live API and manual Windows/high-DPI/accessibility acceptance remain pending.
+Target: **0.3.4-rc.1**, baseline `335e718`. Evidence is automated and self-reviewed, with simulated provider responses. Live API and manual Windows/high-DPI/accessibility acceptance remain pending.
 
 | Gate | Check |
 |---|---|
@@ -41,7 +41,7 @@ Regression tests reject duplicate/missing MCQ choices, missing question numbers 
 
 The supplied `examples/AE416-syllabus.txt` must parse unchanged as five topics, three outcomes and three readings; each module keeps its lecture/lab pair `(6,6), (6,9), (8,12), (8,12), (8,15)`, summing to 36/54. Tests cover tab/space/pipe copies, fractional/reversed hour columns, conflicting declared totals, full-syllabus prompts, deterministic headings/allocation table, raw-source project/export round trips, direct paste/generate/download and vertical Streamlit containers. Native Windows coverage checks summary/outline/generation with that same file. Existing weekly outlines, consent, Secrets, partial failures/resume, accepted-material replacement and MCQ structure remain required.
 
-Local Python 3.12: 62 tests discovered, 53 passed and 9 native-display tests skipped; syntax/whitespace checks pass. Providers are simulated; no real API key or paid request is used. Browser visual acceptance remains pending because the local Chromium download failed. GitHub Linux/Windows, native and package results must be checked for the final commit before publication.
+Local Python 3.12: 63 tests discovered, 54 passed and 9 native-display tests skipped; syntax/whitespace checks pass. Providers are simulated; no real API key or paid request is used. Browser visual acceptance remains pending because the local Chromium download failed. GitHub Linux/Windows, native and package results must be checked for the final commit before publication.
 
 ## Syllabus references regression
 
@@ -51,6 +51,12 @@ AE 416 provider prompts and module References must contain Paler-Calmorin, Adanz
 
 The shared adapter and fresh Streamlit/native sessions default to 3.5 Flash-Lite. A simulated request verifies its actual endpoint, then selects 3.8 Flash and verifies that endpoint and preserved selection. Provider resets return to Lite; saved jobs keep their model. Existing consent/Secrets/generation/outline/reference/persistence tests remain required.
 
-The `streamlit-browser` CI job installs Playwright 1.62.1 only as test tooling, starts the real app, verifies model selection, pastes AE 416, generates offline without credentials and downloads Markdown. It checks desktop/mobile horizontal overflow, the main scroll container, anchor navigation, closed assessment, hidden mobile illustration and reduced-motion scrolling. Four PNGs and the explicitly offline placeholder draft are retained as `CourseFramework-Streamlit-review`. Windows packaging waits for both the source/native regression job and this browser job. Browser checks do not validate live model quality or manual accessibility; inspect the final-run screenshots for visual review.
+The `streamlit-browser` CI job installs Playwright 1.62.1 only as test tooling, starts the real app, verifies model selection, pastes AE 416, generates offline without credentials and downloads Markdown. It checks desktop/mobile horizontal overflow, the main scroll container, anchor navigation, closed assessment, hidden mobile illustration and reduced-motion scrolling. Desktop/mobile PNGs and the explicitly offline placeholder draft are retained as `CourseFramework-Streamlit-review`. Windows packaging waits for both the source/native regression job and this browser job. Browser checks do not validate live model quality or manual accessibility; inspect the final-run screenshots for visual review.
 
 Local checks: `node --check tools/capture_streamlit.cjs`, compileall, git diff --check and the Python suite. For local browser capture with Playwright/Chromium available, run `node tools/capture_streamlit.cjs streamlit-review` from the repository root. Source changes require fresh affected CI evidence before publication.
+
+## Hosted scrollbar and in-flight generation regression
+
+The scroll viewport must start below the 60 px Streamlit toolbar and end inside the browser viewport, retain a visible gutter, and apply a 56 px minimum WebKit thumb. Test the actual geometry at desktop/mobile sizes and inspect screenshots, including long generated courses. Standard Firefox/OS scrollbar rendering still needs manual acceptance.
+
+Progress must be inside the generation controls above Generate/Resume, not in pre-page callback output. Unit/AppTest coverage checks partial-failure counts, unchanged accepted content, settings persistence and no repeated requests after rerun. The Chromium runner uses the CI-only streamlit_ui_fixture.py entry point, which runs the actual app with delayed simulated provider transport. It verifies the disabled in-flight action and progress placement within the visible viewport on desktop/mobile, and saves generation screenshots alongside the prior navigation/offline-download captures. All provider requests remain simulated; production entry is app.py. Python/Node syntax, whitespace, Linux/Windows/native/browser/package checks must pass for the final candidate commit.

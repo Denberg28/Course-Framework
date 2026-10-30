@@ -12,12 +12,13 @@ from course_workflow import (CUSTOM_MODEL, GEMINI_MODELS, accept_job, advance, c
                       draft_text, is_complete, new_job)
 
 st.set_page_config(page_title='Course Framework', page_icon='🛩️', layout='wide')
-st.markdown(streamlit_css(), unsafe_allow_html=True)
+st.html(streamlit_css())
 DEFAULTS = {'source': '', 'course_title': '', 'content': '', 'engine_used': 'Local template',
             'model_used': '', 'accepted_source': '', 'pending': None, 'provider': PROVIDERS[1],
             'api_key': '', 'model_choice': GEMINI_MODELS[0], 'custom_model': '',
             'endpoint': 'https://api.openai.com/v1', 'notice': '', 'notice_error': False,
-            'online_consent': False, 'replace_course': False}
+            'online_consent': False, 'replace_course': False,
+            'generation_requested': False, 'generation_status': None}
 for key, value in DEFAULTS.items():
     if key not in st.session_state:
         st.session_state[key] = value
@@ -28,7 +29,33 @@ def notify(text, error=False):
     state.notice, state.notice_error = text, error
 
 
+def clear_generation_status():
+    state.generation_status = None
+
+
+def queue_generation():
+    # Callbacks only queue work. Progress is rendered in the authoring controls.
+    state.generation_requested = True
+    state.notice = ''
+
+
+def render_generation_status():
+    status = state.generation_status
+    if not status:
+        return
+    if status['total']:
+        st.progress(status['completed'] / status['total'], text=status['text'])
+    if status.get('error'):
+        st.error(status['error'])
+
+
+def endpoint_changed():
+    state.online_consent = False
+    clear_generation_status()
+
+
 def provider_changed():
+    clear_generation_status()
     state.api_key, state.online_consent = '', False
     state.model_choice = (GEMINI_MODELS[0] if state.provider == PROVIDERS[1] else
                           'Offline template' if state.provider == PROVIDERS[0] else CUSTOM_MODEL)
@@ -59,6 +86,7 @@ def example():
         return notify('Select Replace syllabus before loading over existing text.', True)
     state.source = (Path(__file__).parent / 'examples' / 'AE416-syllabus.txt').read_text(encoding='utf-8')
     state.course_title = ''
+    clear_generation_status()
     notify('AE 416 example loaded. Generate materials from the full syllabus.')
 
 
@@ -71,6 +99,7 @@ def import_source():
     try:
         state.source = extract_text(file.name, file.getvalue())
         state.course_title = ''
+        clear_generation_status()
         notify('Syllabus imported.')
     except CourseError as error:
         notify(str(error), True)
@@ -84,6 +113,7 @@ def open_project():
         return notify('Save your current project and select Replace project first.', True)
     try:
         saved = load_project(file.getvalue())
+        clear_generation_status()
         state.update(source=saved['syllabus'], course_title=saved['title'], content=saved['content'],
                      engine_used=saved['engine'], model_used=saved['model'], accepted_source=saved['accepted_syllabus'], pending=saved['pending'],
                      replace_course=False)
@@ -102,6 +132,7 @@ def open_project():
 
 
 def generate():
+    state.generation_status = {'completed': 0, 'total': 0, 'text': '', 'error': ''}
     try:
         cfg = config()
         if cfg.provider != PROVIDERS[0] and not state.online_consent:
@@ -110,19 +141,26 @@ def generate():
         indices = selected_indices()
         resume = can_resume(state.pending, state.source, state.course_title, cfg, indices)
         job = state.pending if resume else new_job(state.source, state.course_title, cfg, indices)
-        bar = st.progress(len(job['completed']) / len(job['indices']), text='Generating modules…')
+        status = state.generation_status
+        status.update(completed=len(job['completed']), total=len(job['indices']))
+        bar = st.progress(status['completed'] / status['total'], text='Preparing modules…')
         while not is_complete(job):
             number = job['indices'][len(job['completed'])] + 1
-            bar.progress(len(job['completed']) / len(job['indices']), text=f'Generating module {number}…')
+            status['text'] = f"Generating module {number} · {status['completed']}/{status['total']} complete"
+            bar.progress(status['completed'] / status['total'], text=status['text'])
             job = advance(job, cfg)
             state.pending = job  # Commit each successful module before requesting the next.
+            status['completed'] = len(job['completed'])
             state.replace_course = False
-        bar.progress(1.0, text='Draft ready')
-        notify('Draft ready. Review it and select Use draft.')
+        status['text'] = f"Draft ready · {status['completed']}/{status['total']} complete"
+        bar.progress(1.0, text=status['text'])
     except CourseError as error:
-        notify(str(error), True)
+        state.generation_status['error'] = str(error)
     except Exception:
-        notify('The request stopped unexpectedly. Completed modules and your accepted course are preserved.', True)
+        state.generation_status['error'] = 'The request stopped unexpectedly. Completed modules and your accepted course are preserved.'
+    if state.generation_status['error']:
+        status = state.generation_status
+        status['text'] = f"Stopped · {status['completed']}/{status['total']} complete" if status['total'] else ''
 
 
 def use_draft():
@@ -163,9 +201,11 @@ if state.notice:
     (st.error if state.notice_error else st.success)(state.notice)
 
 # Keep the original reading order: full-width input, compact controls, output below.
+run_generation = False
 with st.container(key='syllabus_input'):
     st.markdown('<div id="syllabus" class="cf-section-anchor" tabindex="-1"></div>', unsafe_allow_html=True)
     st.text_area('Syllabus', key='source', height=240, max_chars=180000,
+                 on_change=clear_generation_status,
                  placeholder='Paste the full course syllabus: course details, outcomes, topic/hour table, and references.')
     plan, count = None, 0
     try:
@@ -187,6 +227,7 @@ with st.container(key='syllabus_input'):
     if state.model_choice not in options:
         state.model_choice = options[0]
     agent.selectbox('Agent model', options, key='model_choice',
+                    on_change=clear_generation_status,
                     help='3.5 Flash-Lite is the default. Choose 3.8 Flash for demanding work. Availability and quotas depend on your provider account.')
     hosted_key = ''
     if state.provider == PROVIDERS[1]:
@@ -199,21 +240,30 @@ with st.container(key='syllabus_input'):
     elif state.provider != PROVIDERS[0]:
         key.text_input('API key', type='password', key='api_key')
     if state.model_choice == CUSTOM_MODEL:
-        st.text_input('Model ID', key='custom_model', placeholder='Provider model ID')
+        st.text_input('Model ID', key='custom_model', placeholder='Provider model ID', on_change=clear_generation_status)
     if state.provider != PROVIDERS[0]:
         st.checkbox('Send syllabus to this agent (fees/quota may apply)', key='online_consent')
     try:
         resumable = bool(count) and can_resume(state.pending, state.source, state.course_title, config(), selected_indices())
-        st.button('Resume' if resumable else 'Generate', type='primary', on_click=generate, disabled=not count, width='stretch')
+        with st.container(key='generation_controls'):
+            progress_panel = st.container(key='generation_status')
+            with progress_panel:
+                if not state.generation_requested:
+                    render_generation_status()
+            st.button('Generating…' if state.generation_requested else 'Resume' if resumable else 'Generate',
+                      key='generate_button', type='primary', on_click=queue_generation,
+                      disabled=not count or state.generation_requested, width='stretch')
+            run_generation = state.generation_requested
     except CourseError as error:
         st.error(str(error))
     with st.expander('Settings & files'):
         st.selectbox('Provider', PROVIDERS, key='provider', on_change=provider_changed)
         if state.provider == PROVIDERS[2]:
-            st.text_input('API base URL', key='endpoint', on_change=lambda: state.update(online_consent=False))
-        st.text_input('Title (optional)', key='course_title')
+            st.text_input('API base URL', key='endpoint', on_change=endpoint_changed)
+        st.text_input('Title (optional)', key='course_title', on_change=clear_generation_status)
         if count:
             st.selectbox('Modules', scope_options, key='module_scope',
+                         on_change=clear_generation_status,
                          format_func=lambda i: f'All modules ({count})' if i == -1 else f"{i + 1}. {plan['topics'][i]['title']}")
         if not hosted_key:
             st.button('Clear key', on_click=lambda: state.update(api_key=''))
@@ -255,7 +305,7 @@ with st.container(key='course_output'):
         if is_complete(job):
             if state.content or state.source != job['syllabus']:
                 st.checkbox('Replace current course', key='replace_course')
-            st.button('Use draft', on_click=use_draft, type='primary')
+            st.button('Use draft', on_click=use_draft, type='primary', disabled=state.generation_requested)
         render_course(draft_text(job))
     elif state.content:
         render_course(state.content)
@@ -267,3 +317,10 @@ with st.container(key='course_output'):
     if job or state.content:
         st.caption('Review facts, references and answer keys before teaching. Save project keeps unfinished drafts.')
         st.markdown('<a class="cf-return" href="#syllabus">↑ Back to syllabus</a>', unsafe_allow_html=True)
+
+# Register every settings/editor widget before rerunning, so its state survives.
+if run_generation:
+    state.generation_requested = False  # Consume once; reruns never repeat a request.
+    with progress_panel:
+        generate()
+    st.rerun()

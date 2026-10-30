@@ -9,7 +9,7 @@ async function main() {
   const target = path.resolve(process.argv[2] || 'streamlit-review');
   fs.mkdirSync(target, { recursive: true });
   const server = spawn(process.env.COURSE_UI_PYTHON || 'python', [
-    '-m', 'streamlit', 'run', 'app.py', '--server.headless', 'true',
+    '-m', 'streamlit', 'run', 'tools/streamlit_ui_fixture.py', '--server.headless', 'true',
     '--server.port', '8507', '--server.address', '127.0.0.1', '--browser.gatherUsageStats', 'false'
   ], { cwd: path.resolve(__dirname, '..'), stdio: ['ignore', 'pipe', 'pipe'] });
   let logs = '';
@@ -58,13 +58,20 @@ async function main() {
     async function checkLayout() {
       const shape = await page.evaluate(() => {
         const main = document.querySelector('[data-testid="stMain"]');
+        const toolbar = document.querySelector('[data-testid="stHeader"]');
         return { overflow: getComputedStyle(main).overflowY, height: main.clientHeight,
           scrollHeight: main.scrollHeight, width: document.documentElement.scrollWidth, viewport: innerWidth,
-          gutter: main.getBoundingClientRect().width - main.clientWidth };
+          gutter: main.getBoundingClientRect().width - main.clientWidth,
+          top: main.getBoundingClientRect().top, bottom: main.getBoundingClientRect().bottom,
+          toolbarBottom: toolbar ? toolbar.getBoundingClientRect().bottom : 0,
+          thumbMinimum: parseFloat(getComputedStyle(main, '::-webkit-scrollbar-thumb').minHeight) };
       });
       assert.equal(shape.overflow, 'scroll');
       assert.ok(shape.scrollHeight > shape.height);
       assert.ok(shape.gutter > 0, 'Scrollbar has a reserved visible gutter');
+      assert.ok(shape.top >= shape.toolbarBottom, 'Scroll track starts below the toolbar');
+      assert.ok(shape.bottom <= page.viewportSize().height + 1, 'Scroll track stays inside the viewport');
+      assert.ok(shape.thumbMinimum >= 56, 'Long-course thumb remains grabbable');
       assert.ok(shape.width <= shape.viewport + 1, 'No horizontal page overflow');
     }
     await checkLayout();
@@ -88,6 +95,36 @@ async function main() {
     const download = await downloadEvent;
     await download.saveAs(path.join(target, 'offline-draft.md'));
     assert.ok(fs.readFileSync(path.join(target, 'offline-draft.md'), 'utf8').includes('Paler-Calmorin'));
+    await page.getByRole('link', { name: 'Syllabus', exact: true }).click();
+    await settleScroll();
+    await page.getByTestId('stExpander').filter({ has: page.getByText('Settings & files', { exact: true }) }).locator('summary').click();
+    await choose('Provider', 'Google AI Studio (Gemini)');
+    await page.getByTestId('stExpander').filter({ has: page.getByText('Settings & files', { exact: true }) }).locator('summary').click();
+    await page.getByText('Gemini key configured in Secrets', { exact: true }).waitFor();
+    await page.getByText('Send syllabus to this agent (fees/quota may apply)', { exact: true }).click();
+    await page.waitForFunction(() => document.querySelector('input[aria-label="Send syllabus to this agent (fees/quota may apply)"]')?.checked);
+    assert.equal(await page.getByRole('checkbox', { name: 'Send syllabus to this agent (fees/quota may apply)', exact: true }).isChecked(), true);
+    async function captureGeneration(name) {
+      await page.getByRole('button', { name: 'Generate', exact: true }).click();
+      const busy = page.getByRole('button', { name: 'Generating…', exact: true });
+      await busy.waitFor();
+      assert.equal(await busy.isEnabled(), false);
+      const status = page.locator('.st-key-generation_status');
+      await status.getByText(/Generating module/).waitFor();
+      const position = await status.evaluate(el => {
+        const b = document.querySelector('.st-key-generation_controls button');
+        const m = document.querySelector('[data-testid="stMain"]');
+        return { top: el.getBoundingClientRect().top, bottom: el.getBoundingClientRect().bottom,
+          buttonTop: b.getBoundingClientRect().top, mainTop: m.getBoundingClientRect().top, viewport: innerHeight };
+      });
+      assert.ok(position.top >= position.mainTop, 'Generation progress is visible in the scroll viewport');
+      assert.ok(position.bottom <= position.buttonTop + 1, 'Progress sits above Generate');
+      assert.ok(position.bottom <= position.viewport, 'Progress is not below the screen');
+      await page.screenshot({ path: path.join(target, name) });
+      await status.getByText('Draft ready · 5/5 complete', { exact: true }).waitFor();
+      await page.getByRole('button', { name: 'Generate', exact: true }).waitFor();
+    }
+    await captureGeneration('streamlit-generation-desktop.png');
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole('link', { name: 'Syllabus', exact: true }).click();
     await settleScroll();
@@ -99,13 +136,14 @@ async function main() {
       return el.getBoundingClientRect().top >= (toolbar ? toolbar.getBoundingClientRect().bottom : 0);
     }), 'Mobile masthead clears the Streamlit toolbar');
     await page.screenshot({ path: path.join(target, 'streamlit-input-mobile.png') });
+    await captureGeneration('streamlit-generation-mobile.png');
     await page.getByRole('link', { name: 'Course material ↓', exact: true }).click();
     await settleScroll();
     await page.screenshot({ path: path.join(target, 'streamlit-course-mobile.png') });
     await page.emulateMedia({ reducedMotion: 'reduce' });
     assert.equal(await page.getByTestId('stMain').evaluate(el => getComputedStyle(el).scrollBehavior), 'auto');
     assert.equal(await page.getByTestId('stException').count(), 0);
-    console.log('Browser smoke passed: model selection, offline generation/download, navigation, desktop/mobile overflow, reduced motion.');
+    console.log('Browser smoke passed: model selection, offline download, simulated in-flight progress, scrollbar/toolbar geometry, desktop/mobile navigation, reduced motion.');
   } finally {
     if (browser) await browser.close();
     server.kill('SIGTERM');

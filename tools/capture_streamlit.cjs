@@ -124,7 +124,9 @@ async function main() {
       await status.getByText('Draft ready · 5/5 complete', { exact: true }).waitFor();
       await page.getByRole('button', { name: 'Generate', exact: true }).waitFor();
     }
+    await choose('Agent model', 'gemini-3.8-flash');
     await captureGeneration('streamlit-generation-desktop.png');
+    await choose('Agent model', 'gemini-3.5-flash-lite');
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole('link', { name: 'Syllabus', exact: true }).click();
     await settleScroll();

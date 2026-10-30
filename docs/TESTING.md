@@ -1,6 +1,6 @@
 # Verification and release gates
 
-Target: **0.3.5-rc.1**, baseline `e0901c7`. Evidence is automated and self-reviewed, with simulated provider responses. Live API and manual Windows/high-DPI/accessibility acceptance remain pending.
+Target: **0.3.6-rc.1**, baseline `15a723b`. Evidence is automated and self-reviewed, with simulated provider responses. Live API and manual Windows/high-DPI/accessibility acceptance remain pending.
 
 | Gate | Check |
 |---|---|
@@ -68,3 +68,11 @@ examples/AE417-syllabus.md reproduces the supplied OJT curriculum, including its
 Shared workflow and Streamlit tests simulate all 13 module responses, check exactly 13 requests (also after rerun), progress 13/13, the final heading, source/project preservation and old-contract checkpoint rejection. The Streamlit scenario starts with an existing completed draft and accepted material, changes the syllabus and generates all 13 modules while preserving the accepted text; replacement approval resets before widget registration. Windows verifies 13 offline modules in the native worker. Chromium pastes the tab-separated table over the previous course, checks the summary and completed 13-module Markdown download and captures its course view. Browser offline material is explicitly placeholder content, not live AI teaching-quality evidence.
 
 Local Python 3.12: 69 tests discovered, 59 passed and 10 native-display tests skipped. Final affected GitHub Linux/Windows/native/browser/package checks must pass before prerelease publication. No real credential or paid request is used.
+
+## Gemini 3.8 request and failure regression
+
+Verify the real adapter wrapper sends the 3.8 preset and models/ alias to the documented generateContent route with medium thinking, maxOutputTokens 32768 and timeout 180; Lite/custom settings stay unchanged. Mock the HTTP opener (not time.sleep) to assert timeout forwarding, one attempted request, sanitized raw/wrapped timeouts, distinct network and HTTP 504 errors. Known MAX_TOKENS, policy, recitation and continuation reasons must be distinct; unknown provider strings must never leak a credential. Non-STOP partial text is rejected.
+
+The Streamlit 3.8 regression simulates a timeout and MAX_TOKENS after the first completed module. Each failure must leave one checkpoint and accepted text intact; Resume makes exactly four remaining requests with the extended timeout and reruns make none. Existing model selection, Secrets, full-table parsing, teaching validation, export and native tests remain required. Chromium generates 3.8 desktop and Lite mobile through delayed no-network fixtures; the fixture rejects wrong 3.8 payload/timeout settings.
+
+Local Python 3.12: 73 tests discovered, 63 passed and 10 native-display skips; compileall, Node syntax and whitespace checks are required. Final GitHub Linux/Windows/native/browser/package gates must pass before publication. No real model response, paid generation, key-specific availability or actual 180-second elapsed wait is claimed by simulated tests.

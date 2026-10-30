@@ -15,10 +15,14 @@ import hosted_keys
 from test_workflow import response
 
 
-def simulated_request(url, headers, payload):
+def simulated_request(url, headers, payload, *, timeout=60):
     # No credential, URL or prompt is logged or sent anywhere.
     if not url.startswith('https://generativelanguage.googleapis.com/'):
         raise engines.CourseError('The UI fixture supports simulated Gemini requests only.')
+    if '/gemini-3.8-flash:generateContent' in url:
+        if timeout != 180 or payload.get('generationConfig') != {
+                'maxOutputTokens': 32768, 'thinkingConfig': {'thinkingLevel': 'medium'}}:
+            raise engines.CourseError('The 3.8 Flash request did not use its reasoning settings.')
     time.sleep(1.2)
     return response()
 

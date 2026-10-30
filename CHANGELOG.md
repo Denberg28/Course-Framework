@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.6-rc.1 — Gemini 3.8 reasoning request reliability
+
+- Give the 3.8 Flash preset a 180-second connection/read timeout instead of the shared 60 seconds, explicit medium reasoning and a 32,768-token ceiling including thinking. Lite and custom/compatible models retain their prior limits.
+- Separate timeout/network failure, provider HTTP 503/504, MAX_TOKENS, content blocks, recitation and continuation messages without reflecting provider bodies or credentials. Discard incomplete material.
+- Preserve completed modules, accepted material, explicit model choice and manual Resume; add no automatic retry, continuation or fallback model.
+- Verify request settings, real HTTP-wrapper timeout forwarding, sanitized errors and interrupted 3.8 checkpoint/resume with simulations; browser QA now generates through both 3.8 and Lite fixtures. Real-account latency/access remains unverified.
+
 ## 0.3.5-rc.1 — Full curriculum table parsing
 
 - Fix AE 417 clipboard tables collapsing into two modules: blank leading columns and row indentation no longer demote numbered topics to subtopics or turn Laboratory/Equipment into a module.

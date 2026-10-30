@@ -25,6 +25,50 @@ class EngineTests(unittest.TestCase):
         self.assertNotIn('fake-secret', repr(config))
         self.assertIn('Lesson content', generate_course(SAMPLE, 'Course', config, transport=send))
 
+    def test_flash_reasoning_settings_reach_the_request_wrapper(self):
+        answer = {'candidates': [{'finishReason': 'STOP', 'content': {'parts': [{'text': 'Final lesson'}]}}]}
+        for model in ('gemini-3.8-flash', 'models/gemini-3.8-flash', 'gemini-3.5-flash-lite', 'custom-model'):
+            with self.subTest(model=model), patch('engines.request_json', return_value=answer) as send:
+                generate_course(SAMPLE, '', EngineConfig('Google AI Studio (Gemini)', 'fake-secret', model))
+                is_flash = model.removeprefix('models/') == 'gemini-3.8-flash'
+                self.assertEqual(send.call_args.kwargs['timeout'], 180 if is_flash else 60)
+                settings = send.call_args.args[2]['generationConfig']
+                self.assertEqual(settings['maxOutputTokens'], 32768 if is_flash else 16384)
+                if is_flash:
+                    self.assertEqual(settings['thinkingConfig'], {'thinkingLevel': 'medium'})
+                else:
+                    self.assertNotIn('thinkingConfig', settings)
+                self.assertNotIn('fake-secret', send.call_args.args[0])
+
+    def test_extended_timeout_is_applied_once_and_errors_are_distinct(self):
+        for error in (TimeoutError('fake-secret'), URLError(TimeoutError('fake-secret')),
+                      URLError('fake-secret'), HTTPError('https://fake-secret', 504, 'fake-secret', {}, io.BytesIO())):
+            with self.subTest(error=type(error)), patch('engines.build_opener') as opener:
+                opener.return_value.open.side_effect = error
+                with self.assertRaises(CourseError) as raised:
+                    request_json('https://example.com', {}, {}, timeout=180)
+                self.assertEqual(opener.return_value.open.call_count, 1)
+                self.assertEqual(opener.return_value.open.call_args.kwargs['timeout'], 180)
+                message = str(raised.exception)
+                self.assertNotIn('fake-secret', message)
+                if isinstance(error, HTTPError):
+                    self.assertIn('HTTP 504', message)
+                elif isinstance(error, TimeoutError) or isinstance(error.reason, TimeoutError):
+                    self.assertIn('180-second', message)
+                else:
+                    self.assertIn('Could not connect', message)
+
+    def test_gemini_finish_reasons_do_not_conflate_limits_and_blocks(self):
+        cfg = EngineConfig('Google AI Studio (Gemini)', 'fake-secret', 'gemini-3.8-flash')
+        for reason, expected in [('MAX_TOKENS', '32,768-token'), ('CONTINUATION', 'Automatic extra requests are off'),
+                                 ('SAFETY', 'content policy'), ('RECITATION', 'source recitation'),
+                                 ('fake-secret', 'stopped before completing')]:
+            answer = {'candidates': [{'finishReason': reason, 'content': {'parts': [{'text': 'Incomplete content'}]}}]}
+            with self.subTest(reason=reason), self.assertRaises(CourseError) as raised:
+                generate_course(SAMPLE, '', cfg, transport=lambda *a: answer)
+            self.assertIn(expected, str(raised.exception))
+            self.assertNotIn('fake-secret', str(raised.exception))
+
     def test_openai_compatible_and_revision(self):
         def send(url, headers, payload):
             self.assertEqual(url, 'http://localhost:1234/v1/chat/completions')

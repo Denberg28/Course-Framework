@@ -1,11 +1,12 @@
 """Full-width Streamlit authoring: paste the full syllabus, generate, preview below."""
 from pathlib import Path
+import time
 import streamlit as st
 
 from academy_theme import streamlit_css, streamlit_header
 from course_core import (CourseError, VERSION, analyze_syllabus, course_allocation, export_bundle,
                          extract_text, load_project, make_project, project_bytes)
-from engines import EngineConfig, PROVIDERS
+from engines import EngineConfig, GEMINI_FLASH_MODEL, PROVIDERS
 from hosted_keys import gemini_secret
 from lesson_format import presentation_parts
 from course_workflow import (CUSTOM_MODEL, GEMINI_MODELS, accept_job, advance, can_resume,
@@ -151,7 +152,20 @@ def generate():
             number = job['indices'][len(job['completed'])] + 1
             status['text'] = f"Generating module {number} · {status['completed']}/{status['total']} complete"
             bar.progress(status['completed'] / status['total'], text=status['text'])
-            job = advance(job, cfg)
+            last_update = 0.0
+            def receiving(characters):
+                nonlocal last_update
+                now = time.monotonic()
+                if now - last_update < .2:
+                    return
+                last_update = now
+                phase = f'Receiving module {number}' if characters else f'Working on module {number}'
+                status['text'] = f"{phase} · {status['completed']}/{status['total']} complete · {characters:,} characters received"
+                bar.progress(status['completed'] / status['total'], text=status['text'])
+            if cfg.provider == PROVIDERS[1] and cfg.model.strip().removeprefix('models/') == GEMINI_FLASH_MODEL:
+                job = advance(job, cfg, on_progress=receiving)
+            else:
+                job = advance(job, cfg)
             state.pending = job  # Commit each successful module before requesting the next.
             status['completed'] = len(job['completed'])
         status['text'] = f"Draft ready · {status['completed']}/{status['total']} complete"
@@ -278,7 +292,7 @@ with st.container(key='syllabus_input'):
         st.file_uploader('Open project', type=['json'], key='project_file')
         st.checkbox('Replace project', key='replace_project')
         st.button('Open', on_click=open_project)
-        st.caption('Save project keeps accepted material and unfinished modules. Credentials are excluded.')
+        st.caption(f'v{VERSION} · Save project keeps accepted material and unfinished modules. Credentials are excluded.')
     if plan:
         with st.expander('Outline'):
             st.markdown(course_allocation(plan))

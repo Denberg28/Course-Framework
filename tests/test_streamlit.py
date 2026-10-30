@@ -102,9 +102,10 @@ class StreamlitTests(unittest.TestCase):
         self.app.selectbox(key='model_choice').select('gemini-3.8-flash').run()
         with patch('engines.request_json', return_value=response()) as send:
             self.click('Generate')
-            self.assertIn('/gemini-3.8-flash:generateContent', send.call_args.args[0])
+            self.assertIn('/gemini-3.8-flash:streamGenerateContent?alt=sse', send.call_args.args[0])
             self.assertEqual(send.call_args.kwargs['timeout'], 180)
-            self.assertEqual(send.call_args.args[2]['generationConfig']['thinkingConfig'], {'thinkingLevel': 'medium'})
+            self.assertEqual(send.call_args.args[2]['generationConfig']['thinkingConfig'], {'thinkingLevel': 'medium', 'includeThoughts': True})
+            self.assertTrue(send.call_args.kwargs['stream'])
         self.assertEqual(self.app.session_state['pending']['model'], 'gemini-3.8-flash')
         self.app.run()
         self.assertEqual(self.app.session_state['model_choice'], 'gemini-3.8-flash')

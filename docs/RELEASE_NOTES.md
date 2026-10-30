@@ -1,11 +1,9 @@
-# Course Framework 0.3.8-rc.1 — Just create the module
+# Course Framework 0.3.9-rc.1 — Stream 3.8 modules while preserving reasoning
 
-A topic, a title plus a short numbered/bulleted list, or a full syllabus is enough to create a draft. Course codes, Week/Topics labels, outcomes, hours and references are optional. A single topic/title creates one module.
+Gemini 3.8 Flash now uses streamed SSE responses instead of waiting for a full JSON result. It keeps **medium reasoning**, the full syllabus/lesson request and the 32768-token allowance. No lower reasoning setting, shortened syllabus or reduced lesson scope is introduced.
 
-The supplied drone 101 example now creates two modules: drone component and drone schematic. It is no longer mistaken for a code/title/description with zero topics. Full AE 416 and AE 417 syllabi retain their original metadata, hours and readings.
+Provider activity is consumed while reasoning and generating. Summary content is discarded; the app displays only working/received-character progress above Generate. It finishes immediately when the model signals completion, avoiding a late timeout caused by waiting for the connection to close. Completed modules are checkpointed; interrupted output never replaces accepted material. Matching partial jobs can Resume without replaying completed requests.
 
-The agent still receives the preferred discussion/activity/five-MCQ layout, but completed nonempty text is kept when its format differs. Layout issues become review notes rather than failed requests. Missing references are marked without inventing a reading list; unspecified hours stay unassigned. See docs/MODULE_POLICY.md.
+The 180-second connection/idle timeout remains. A fifteen-minute response budget is checked between reads; an already blocked read can extend that by its socket timeout. Streaming cannot force a busy provider to send data or prevent server-side 504s. No automatic retry, continuation or fallback-model call is added. The deployed version appears in Settings & files; save your project before refreshing.
 
-Source text and accepted material remain intact. New jobs use the updated input/prompt contract; older unfinished jobs need fresh generation, while accepted content stays readable. Save projects before refreshing Streamlit. Online consent, keys, provider completion, bounded output and no-automatic-retry behavior remain.
-
-Publication requires Linux/Windows/native tests, mobile browser generation/download for the exact simple example, desktop/mobile/progress/model/table regressions, Windows packaging and packaged startup. Providers are simulated; live account behavior and teaching accuracy require separate validation. This is an unsigned prerelease; extract the whole ZIP before running CourseFramework.exe.
+Publication requires Linux/Windows/native tests, a real local HTTP chunked-SSE integration check, simulated streaming/progress/rollback/resume tests, actual Chromium desktop/mobile checks, Windows packaging and packaged startup. No real Google API call or live latency/teaching-quality result is claimed. This remains an unsigned prerelease; extract the whole Windows ZIP before running CourseFramework.exe.

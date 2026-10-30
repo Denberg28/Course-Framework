@@ -111,17 +111,21 @@ class DesktopTests(unittest.TestCase):
         self.assertEqual(str(self.app.apply_button.cget('state')), 'disabled')
 
     def test_model_selection_and_online_consent_prevent_accidental_call(self):
+        self.assertEqual(self.app.model.get(), 'gemini-3.5-flash-lite')
         self.app.set_source(SAMPLE)
-        self.app.model.set('gemini-3.5-flash-lite')
+        self.app.model.set('gemini-3.8-flash')
         self.app.key.set('fake-key')
         with patch('desktop.advance', side_effect=AssertionError('not allowed')), patch('desktop.messagebox.showerror'):
             self.app.start()
         self.assertFalse(self.app.busy)
-        self.assertEqual(self.app.config().model, 'gemini-3.5-flash-lite')
+        self.assertEqual(self.app.config().model, 'gemini-3.8-flash')
         self.app.provider.set(PROVIDERS[2])
         self.app.provider_changed()
         self.assertEqual(self.app.key.get(), '')
         self.assertFalse(self.app.consent.get())
+        self.app.provider.set(PROVIDERS[1])
+        self.app.provider_changed()
+        self.assertEqual(self.app.model.get(), 'gemini-3.5-flash-lite')
 
     def test_minimum_window_and_startup_controls_fit(self):
         self.assertLessEqual(self.root.winfo_width(), self.root.winfo_screenwidth() - 40)

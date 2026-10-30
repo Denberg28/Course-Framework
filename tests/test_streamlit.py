@@ -18,6 +18,23 @@ class StreamlitTests(unittest.TestCase):
         self.click('Example')
         self.app.selectbox(key='provider').select('Local template').run()
 
+    def test_default_lite_and_selected_flash_route_to_the_right_model(self):
+        self.assertEqual(self.app.session_state['model_choice'], 'gemini-3.5-flash-lite')
+        self.click('Example')
+        self.app.text_input(key='api_key').set_value('fake-key').run()
+        self.app.checkbox(key='online_consent').check().run()
+        self.app.selectbox(key='module_scope').select(0).run()
+        with patch('engines.request_json', return_value=response()) as send:
+            self.click('Generate')
+            self.assertIn('/gemini-3.5-flash-lite:generateContent', send.call_args.args[0])
+        self.app.selectbox(key='model_choice').select('gemini-3.8-flash').run()
+        with patch('engines.request_json', return_value=response()) as send:
+            self.click('Generate')
+            self.assertIn('/gemini-3.8-flash:generateContent', send.call_args.args[0])
+        self.assertEqual(self.app.session_state['pending']['model'], 'gemini-3.8-flash')
+        self.app.run()
+        self.assertEqual(self.app.session_state['model_choice'], 'gemini-3.8-flash')
+
     def test_direct_generate_use_edit_and_download_survive_rerun(self):
         self.assertEqual(len(self.app.tabs), 0)
         self.sample_local()
@@ -79,6 +96,8 @@ class StreamlitTests(unittest.TestCase):
         self.assertEqual(self.app.session_state['api_key'], '')
         self.assertFalse(self.app.session_state['online_consent'])
         self.assertFalse(self.app.exception)
+        self.app.selectbox(key='provider').select('Google AI Studio (Gemini)').run()
+        self.assertEqual(self.app.session_state['model_choice'], 'gemini-3.5-flash-lite')
 
     def test_no_consent_does_not_call_provider_or_overwrite(self):
         self.click('Example')

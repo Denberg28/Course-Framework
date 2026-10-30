@@ -22,3 +22,5 @@ Windows CI captures actual native widgets with `python tools/capture_ui.py ui-re
 This prepares visual integration. Academy accounts, course/material import contracts, and instructor publication are not implemented.
 
 New generated modules focus on ordered presentation/discussion, one activity, and five MCQs; video suggestions are removed. Streamlit collapses assessment, answer key, and reference details by default, while keeping discussion visible.
+
+Version 0.3.3 restores the original airplane logo/favicon in a compact header. A small static paper/check illustration uses the existing palette and hides below 640 px. The page retains the same full-width input/output allocation. The main page has a visible 12 px vertical scrollbar with a stable gutter; two small anchor links and a return link ease long-course navigation. Anchor targets allow for the Streamlit header. Reduced-motion settings disable smooth scrolling, keyboard focus outlines remain visible, and no animation, external font/image or content-obscuring overlay is added. New Chromium captures cover desktop and mobile for review.

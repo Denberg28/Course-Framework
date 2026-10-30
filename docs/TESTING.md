@@ -1,6 +1,6 @@
 # Verification and release gates
 
-Target: **0.3.2-rc.1**, baseline `33f0a3f`. Evidence is automated and self-reviewed, with simulated provider responses. Live API and manual Windows/high-DPI/accessibility acceptance remain pending.
+Target: **0.3.3-rc.1**, baseline `ef63f8f`. Evidence is automated and self-reviewed, with simulated provider responses. Live API and manual Windows/high-DPI/accessibility acceptance remain pending.
 
 | Gate | Check |
 |---|---|
@@ -41,8 +41,16 @@ Regression tests reject duplicate/missing MCQ choices, missing question numbers 
 
 The supplied `examples/AE416-syllabus.txt` must parse unchanged as five topics, three outcomes and three readings; each module keeps its lecture/lab pair `(6,6), (6,9), (8,12), (8,12), (8,15)`, summing to 36/54. Tests cover tab/space/pipe copies, fractional/reversed hour columns, conflicting declared totals, full-syllabus prompts, deterministic headings/allocation table, raw-source project/export round trips, direct paste/generate/download and vertical Streamlit containers. Native Windows coverage checks summary/outline/generation with that same file. Existing weekly outlines, consent, Secrets, partial failures/resume, accepted-material replacement and MCQ structure remain required.
 
-Local Python 3.12: 61 tests discovered, 52 passed and 9 native-display tests skipped; syntax/whitespace checks pass. Providers are simulated; no real API key or paid request is used. Browser visual acceptance remains pending because the local Chromium download failed. GitHub Linux/Windows, native and package results must be checked for the final commit before publication.
+Local Python 3.12: 62 tests discovered, 53 passed and 9 native-display tests skipped; syntax/whitespace checks pass. Providers are simulated; no real API key or paid request is used. Browser visual acceptance remains pending because the local Chromium download failed. GitHub Linux/Windows, native and package results must be checked for the final commit before publication.
 
 ## Syllabus references regression
 
 AE 416 provider prompts and module References must contain Paler-Calmorin, Adanza and Sevilla, with SYL-1/2/3 IDs, and no injected agencies/publishers. Tests check aviation/strength-of-materials topics do not infer references, supplied bibliography URLs survive across arbitrary domains, invented URLs (including former catalog URLs) are marked, absent readings are flagged, and bibliography heading aliases are recognized. Existing lesson/key, full-syllabus/hour, Secrets, checkpoint and persistence tests remain required. All provider responses are simulated; real-book content and live teaching quality are unverified. Check final Linux/Windows/native/package CI before publication.
+
+## Default model and Streamlit browser gate
+
+The shared adapter and fresh Streamlit/native sessions default to 3.5 Flash-Lite. A simulated request verifies its actual endpoint, then selects 3.8 Flash and verifies that endpoint and preserved selection. Provider resets return to Lite; saved jobs keep their model. Existing consent/Secrets/generation/outline/reference/persistence tests remain required.
+
+The `streamlit-browser` CI job installs Playwright 1.62.1 only as test tooling, starts the real app, verifies model selection, pastes AE 416, generates offline without credentials and downloads Markdown. It checks desktop/mobile horizontal overflow, the main scroll container, anchor navigation, closed assessment, hidden mobile illustration and reduced-motion scrolling. Four PNGs and the explicitly offline placeholder draft are retained as `CourseFramework-Streamlit-review`. Windows packaging waits for both the source/native regression job and this browser job. Browser checks do not validate live model quality or manual accessibility; inspect the final-run screenshots for visual review.
+
+Local checks: `node --check tools/capture_streamlit.cjs`, compileall, git diff --check and the Python suite. For local browser capture with Playwright/Chromium available, run `node tools/capture_streamlit.cjs streamlit-review` from the repository root. Source changes require fresh affected CI evidence before publication.

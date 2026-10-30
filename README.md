@@ -5,7 +5,7 @@ Paste a syllabus, choose an agent model, and generate modules with presentation/
 ## Use it
 
 1. **Paste the full course syllabus** as supplied: course heading, description, units, outcomes, lecture/lab topic table, and readings. The included [AE 416 example](examples/AE416-syllabus.txt) is detected as five modules, three outcomes, 36 lecture hours and 54 laboratory hours without relabeling it. Labelled and weekly outlines remain supported.
-2. **Choose an agent model** and enter its API key if not configured in Streamlit Secrets. Gemini presets are `gemini-3.8-flash` and `gemini-3.5-flash-lite`; select/type a custom model ID when needed. Availability and quotas depend on your provider account.
+2. **Choose an agent model** and enter its API key if not configured in Streamlit Secrets. **Gemini 3.5 Flash-Lite** (`gemini-3.5-flash-lite`) is the default; choose **3.8 Flash** (`gemini-3.8-flash`) for demanding work, or select/type a custom model ID. Availability and quotas depend on your provider account.
 3. Select **all modules** or **one module**, allow sending the syllabus to the agent, then **Generate**. Each selected module uses one request; there is no automatic paid retry.
 4. **Review** the generated material below the syllabus and **Download Markdown** directly, including an unfinished draft if needed. **Use draft** accepts a complete course for editing/package export; existing accepted material stays intact until then.
 5. **Save project** to keep the syllabus, accepted edits, and unfinished modules. **Export course** produces a ZIP with Markdown, a collapsible HTML lesson presentation, the source syllabus, and a reopenable project.
@@ -34,7 +34,7 @@ One workspace contains the syllabus and agent controls beside the draft/course e
 
 ## Streamlit
 
-Deployment configuration: repository **Denberg28/Course-Framework**, branch **main**, entrypoint **app.py**, Python **3.12**. The browser interface restores the original top-to-bottom allocation: full-width syllabus input, compact model/key and Generate controls, then a full-width materials preview. The reading area is capped at 1100 px. Settings & files contains import/open/provider and optional module scope; all modules are selected by default. Course overview, assessment, key and references collapse separately; save/download actions stay above the preview. This repository does not establish or verify a public deployment.
+Deployment configuration: repository **Denberg28/Course-Framework**, branch **main**, entrypoint **app.py**, Python **3.12**. The browser interface restores the original airplane branding with a compact navy/gold header and a small static lesson illustration. A visible vertical scrollbar, Syllabus/Course material jump links and a return link support long courses; scrolling respects reduced-motion settings. The illustration hides on narrow screens, and no animation or remote asset is required. The original top-to-bottom allocation remains: full-width syllabus input, compact model/key and Generate controls, then a full-width materials preview. The reading area is capped at 1100 px. Settings & files contains import/open/provider and optional module scope; all modules are selected by default. Course overview, assessment, key and references collapse separately; save/download actions stay above the preview. This repository does not establish or verify a public deployment.
 
 You can configure a deployment-owned Gemini key under **Manage app → Settings → Secrets**:
 
@@ -82,3 +82,5 @@ New saves use **project format 2**, including a pending-draft checkpoint and sel
 See [testing](docs/TESTING.md), [architecture](docs/ARCHITECTURE.md), [UI alignment](docs/UI_ALIGNMENT.md), and [known issues](docs/KNOWN_ISSUES.md). Roll back via a focused revert after preserving project and Markdown exports.
 
 The new lesson contract has a different generation fingerprint. Completed/accepted older projects remain readable; older unfinished drafts are preserved in the project but require a fresh draft to use the new presentation/MCQ format.
+
+New sessions, native startup and switching back to Gemini default to 3.5 Flash-Lite. A saved pending job restores its original model, and an explicit 3.8 choice survives reruns; changing defaults does not silently switch an existing request/job. No model speed or free-quota guarantee is implied.

@@ -69,4 +69,64 @@ def streamlit_css():
     button[data-baseweb="tab"] {{ padding: .55rem 1rem; }}
     button[data-baseweb="tab"][aria-selected="true"] {{ background: {WARM}; color: {INK}; }}
     [data-baseweb="tab-highlight"] {{ background: {GOLD}; }}
+    [data-testid="stMain"] {{
+        overflow-y: scroll; scrollbar-gutter: stable; scroll-behavior: smooth;
+        scrollbar-width: auto; scrollbar-color: {MUTED} {FIELD};
+    }}
+    [data-testid="stMain"]::-webkit-scrollbar {{ width: 12px; }}
+    [data-testid="stMain"]::-webkit-scrollbar-track {{ background: {FIELD}; }}
+    [data-testid="stMain"]::-webkit-scrollbar-thumb {{
+        background: {MUTED}; border: 3px solid {FIELD}; border-radius: 8px;
+    }}
+    [data-testid="stMain"]::-webkit-scrollbar-thumb:hover {{ background: {INK}; }}
+    .cf-masthead {{ display: flex; align-items: center; justify-content: space-between;
+        gap: 1rem; padding: .45rem 0 .65rem; }}
+    .cf-brand {{ display: flex; align-items: center; gap: .9rem; min-width: 0; }}
+    .cf-logo {{ display: grid; place-items: center; width: 52px; height: 52px;
+        flex-shrink: 0; font-size: 1.9rem; background: {FIELD}; border: 1px solid {LINE};
+        border-bottom: 3px solid {GOLD}; border-radius: 14px; }}
+    .cf-brand h1 {{ margin: 0; padding: 0; line-height: 1.25; color: {INK}; }}
+    .cf-brand p {{ margin: .3rem 0 0; font-size: .88rem; color: {MUTED}; }}
+    .cf-art {{ width: 128px; height: 70px; flex-shrink: 0; }}
+    .cf-nav {{ display: flex; gap: 1.3rem; padding: .2rem 0 .7rem;
+        border-bottom: 1px solid {LINE}; font-size: .84rem; }}
+    .cf-nav a, .cf-return {{ color: {MUTED}; text-decoration: none;
+        transition: color .15s ease; }}
+    .cf-nav a:hover, .cf-return:hover {{ color: {INK}; text-decoration: underline; }}
+    .cf-nav a:focus-visible, .cf-return:focus-visible {{ outline: 2px solid {INK}; outline-offset: 4px; }}
+    .cf-return {{ font-size: .86rem; }}
+    .cf-section-anchor, #course-material {{ scroll-margin-top: 5rem; }}
+    @media (max-width: 640px) {{
+        .block-container {{ padding-top: 3rem; }}
+        .cf-art {{ display: none; }}
+        .cf-logo {{ width: 42px; height: 42px; font-size: 1.55rem; }}
+        .cf-brand h1 {{ font-size: 1.4rem !important; }}
+        .cf-brand p {{ font-size: .8rem; }}
+    }}
+    @media (prefers-reduced-motion: reduce) {{
+        [data-testid="stMain"] {{ scroll-behavior: auto; }}
+        .cf-nav a, .cf-return {{ transition: none; }}
+    }}
     </style>'''
+
+
+def streamlit_header():
+    """Static original-airplane branding and a small, decorative lesson illustration.
+
+    No user/provider text is interpolated into this HTML.
+    """
+    return '''<header class="cf-masthead">
+    <div class="cf-brand"><span class="cf-logo" aria-hidden="true">🛩️</span>
+    <div><h1>Course Framework</h1><p>Paste the full syllabus → generate course material.</p></div></div>
+    <svg class="cf-art" viewBox="0 0 160 90" fill="none" aria-hidden="true" focusable="false">
+    <rect x="27" y="15" width="65" height="62" rx="7" fill="#fafbfd" stroke="#e4e9f0" transform="rotate(-9 27 15)"/>
+    <rect x="48" y="9" width="65" height="70" rx="7" fill="#ffffff" stroke="#e4e9f0"/>
+    <path d="M61 25H91M61 34H99M61 43H93M61 52H86" stroke="#bac5d2" stroke-width="3" stroke-linecap="round"/>
+    <path d="M61 64H78" stroke="#e6b844" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="117" cy="57" r="18" fill="#fff7df" stroke="#e6b844"/>
+    <path d="M109 57L115 63L125 51" stroke="#102640" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M131 19H143M137 13V25" stroke="#e4e9f0" stroke-width="2" stroke-linecap="round"/>
+    </svg></header>
+    <nav class="cf-nav" aria-label="Workspace navigation">
+    <a href="#syllabus">Syllabus</a><a href="#course-material">Course material ↓</a>
+    </nav>'''

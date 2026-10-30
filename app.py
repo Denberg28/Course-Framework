@@ -2,7 +2,7 @@
 from pathlib import Path
 import streamlit as st
 
-from academy_theme import streamlit_css
+from academy_theme import streamlit_css, streamlit_header
 from course_core import (CourseError, VERSION, analyze_syllabus, course_allocation, export_bundle,
                          extract_text, load_project, make_project, project_bytes)
 from engines import EngineConfig, PROVIDERS
@@ -11,7 +11,7 @@ from lesson_format import presentation_parts
 from course_workflow import (CUSTOM_MODEL, GEMINI_MODELS, accept_job, advance, can_resume,
                       draft_text, is_complete, new_job)
 
-st.set_page_config(page_title='Course Framework', page_icon='📘', layout='wide')
+st.set_page_config(page_title='Course Framework', page_icon='🛩️', layout='wide')
 st.markdown(streamlit_css(), unsafe_allow_html=True)
 DEFAULTS = {'source': '', 'course_title': '', 'content': '', 'engine_used': 'Local template',
             'model_used': '', 'accepted_source': '', 'pending': None, 'provider': PROVIDERS[1],
@@ -158,13 +158,13 @@ def render_course(text):
                 st.markdown(part['references'], unsafe_allow_html=False)
 
 
-st.title('Course Framework')
-st.caption('Paste the full syllabus → generate course material.')
+st.markdown(streamlit_header(), unsafe_allow_html=True)
 if state.notice:
     (st.error if state.notice_error else st.success)(state.notice)
 
 # Keep the original reading order: full-width input, compact controls, output below.
 with st.container(key='syllabus_input'):
+    st.markdown('<div id="syllabus" class="cf-section-anchor" tabindex="-1"></div>', unsafe_allow_html=True)
     st.text_area('Syllabus', key='source', height=240, max_chars=180000,
                  placeholder='Paste the full course syllabus: course details, outcomes, topic/hour table, and references.')
     plan, count = None, 0
@@ -186,7 +186,8 @@ with st.container(key='syllabus_input'):
                ['Offline template'] if state.provider == PROVIDERS[0] else [CUSTOM_MODEL])
     if state.model_choice not in options:
         state.model_choice = options[0]
-    agent.selectbox('Agent model', options, key='model_choice', help='Presets are shortcuts; availability depends on your provider account.')
+    agent.selectbox('Agent model', options, key='model_choice',
+                    help='3.5 Flash-Lite is the default. Choose 3.8 Flash for demanding work. Availability and quotas depend on your provider account.')
     hosted_key = ''
     if state.provider == PROVIDERS[1]:
         try:
@@ -235,7 +236,7 @@ with st.container(key='syllabus_input'):
 
 st.divider()
 with st.container(key='course_output'):
-    st.subheader('Course material')
+    st.subheader('Course material', anchor='course-material')
     job = state.pending
     if state.source or state.content or job:
         try:
@@ -265,3 +266,4 @@ with st.container(key='course_output'):
             st.text_area('Course Markdown', key='content', height=360, max_chars=400000)
     if job or state.content:
         st.caption('Review facts, references and answer keys before teaching. Save project keeps unfinished drafts.')
+        st.markdown('<a class="cf-return" href="#syllabus">↑ Back to syllabus</a>', unsafe_allow_html=True)

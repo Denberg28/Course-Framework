@@ -15,6 +15,7 @@ class EngineTests(unittest.TestCase):
 
     def test_gemini_header_and_response(self):
         def send(url, headers, payload):
+            self.assertIn('/gemini-3.5-flash-lite:generateContent', url)
             self.assertNotIn('fake-secret', url)
             self.assertEqual(headers['x-goog-api-key'], 'fake-secret')
             self.assertIn('generateContent', url)

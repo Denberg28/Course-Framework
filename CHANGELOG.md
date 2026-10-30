@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.2-rc.1 — Syllabus references
+
+- Replace the automatic agency/university/publisher catalog with the bibliography supplied in the syllabus, regardless of subject or source domain.
+- Put the supplied textbook/readings into provider prompts and module reference sections with stable SYL source IDs. For AE 416, retain Paler-Calmorin, Adanza and Sevilla; add no outside agency readings.
+- Preserve bibliography links from any domain while marking model-invented URLs; flag absent references without inventing replacements.
+- Recognize bibliography/reading-list heading variants and distinguish bibliographic metadata from access to the actual source text.
+- Preserve accepted courses and the current syllabus/layout/hours/assessment workflow. A fresh generation uses the updated reference contract.
+
 ## 0.3.1-rc.1 — Full syllabus and screen allocation
 
 - Restore the original Streamlit reading order: paste the full syllabus, Generate, preview materials below at full content width; move optional scope to Settings & files.

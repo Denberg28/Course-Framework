@@ -18,7 +18,7 @@ def profile(config):
     # No key in the fingerprint. A replacement key for the same engine can resume.
     base = config.base_url.strip().rstrip('/') if config.provider == 'OpenAI-compatible' else ''
     model = '' if config.provider == 'Local template' else config.model.strip().removeprefix('models/')
-    return hashlib.sha256(('teaching-hours-v2\n' + config.provider + '\n' + model + '\n' + base).encode()).hexdigest()
+    return hashlib.sha256(('syllabus-references-v3\n' + config.provider + '\n' + model + '\n' + base).encode()).hexdigest()
 
 
 def new_job(syllabus, title, config, indices=None):
@@ -85,7 +85,7 @@ def advance(job, config, *, transport=None):
     index = job['indices'][len(job['completed'])]
     topic = analyze_syllabus(job['syllabus'])['topics'][index]
     text = generate_course(job['syllabus'], job['title'], config, module_index=index, transport=transport)
-    text = restrict_generated_reference_links(remove_video_sections(text))
+    text = restrict_generated_reference_links(remove_video_sections(text), job['syllabus'])
     text = re.sub(r'(?ims)^###\s+References\s*\n.*?(?=^#{1,3}\s|\Z)', '', text)
     text = re.sub(r'(?m)^#{1,2} .+\n?', '', text)
     text = re.sub(r'(?im)^\*\*(?:Week\(s\)|Allocation):\*\*[^\n]*(?:\n|$)', '', text).strip()

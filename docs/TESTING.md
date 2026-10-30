@@ -1,13 +1,13 @@
 # Verification and release gates
 
-Target: **0.3.1-rc.1**, baseline `6dba039`. Evidence is automated and self-reviewed, with simulated provider responses. Live API and manual Windows/high-DPI/accessibility acceptance remain pending.
+Target: **0.3.2-rc.1**, baseline `33f0a3f`. Evidence is automated and self-reviewed, with simulated provider responses. Live API and manual Windows/high-DPI/accessibility acceptance remain pending.
 
 | Gate | Check |
 |---|---|
 | Source | `python -m compileall -q app.py desktop.py academy_theme.py course_core.py engines.py course_workflow.py hosted_keys.py lesson_format.py reference_catalog.py tests tools`; `git diff --check` |
 | Core/persistence | File parsing/bounds; atomic failure retains prior file; v1→v2 migration; accepted edits and partial checkpoints round-trip; allow-lists exclude secrets |
 | Generation | One call per module; required sections; quota/truncation failure preserves previous success; resume does not replay completed modules; source/model/endpoint changes do not resume |
-| Teaching format | Ordered discussion/presentation subsections; five questions/options A–D; letter-only answer keys; malformed/missing items rejected; video sections/URLs removed; topic-scoped checked source catalog |
+| Teaching format | Ordered discussion/presentation subsections; five questions/options A–D; letter-only answer keys; malformed/missing items rejected; video sections/URLs removed; syllabus-listed bibliography without automatic source additions |
 | Streamlit | No workflow tabs; model/custom selection; consent; selected/all modules; draft acceptance; editor/download persistence; failure/resume; provider change clears credentials |
 | Native Windows | Single-workspace minimum/startup bounds; offline worker; pause after active module; accepted course preservation; partial save/reopen/resume; changed-source acceptance |
 | Package | Windows build; source `desktop.py --smoke-test`; packaged `CourseFramework.exe --smoke-test`; ZIP and SHA256 |
@@ -35,10 +35,14 @@ AppTest uses a fake deployment secret to verify Gemini request header placement,
 
 ## Presentation checks
 
-Regression tests reject duplicate/missing MCQ choices, missing question numbers and invalid answer letters. HTML tests verify closed assessment/key details and escaped untrusted markup. Native tests verify Preview output without launching a real browser in CI. Existing saved content remains readable; the new contract fingerprint starts fresh for unfinished old drafts. The teaching/reference catalog sources and scope are recorded in docs/REFERENCE_CATALOG.md.
+Regression tests reject duplicate/missing MCQ choices, missing question numbers and invalid answer letters. HTML tests verify closed assessment/key details and escaped untrusted markup. Native tests verify Preview output without launching a real browser in CI. Existing saved content remains readable; the new contract fingerprint starts fresh for unfinished old drafts. The syllabus reference policy and its limits are recorded in docs/REFERENCE_CATALOG.md.
 
 ## Full syllabus and screen allocation regression
 
 The supplied `examples/AE416-syllabus.txt` must parse unchanged as five topics, three outcomes and three readings; each module keeps its lecture/lab pair `(6,6), (6,9), (8,12), (8,12), (8,15)`, summing to 36/54. Tests cover tab/space/pipe copies, fractional/reversed hour columns, conflicting declared totals, full-syllabus prompts, deterministic headings/allocation table, raw-source project/export round trips, direct paste/generate/download and vertical Streamlit containers. Native Windows coverage checks summary/outline/generation with that same file. Existing weekly outlines, consent, Secrets, partial failures/resume, accepted-material replacement and MCQ structure remain required.
 
-Local Python 3.12: 57 tests discovered, 48 passed and 9 native-display tests skipped; syntax/whitespace checks pass. Providers are simulated; no real API key or paid request is used. Browser visual acceptance remains pending because the local Chromium download failed. GitHub Linux/Windows, native and package results must be checked for the final commit before publication.
+Local Python 3.12: 61 tests discovered, 52 passed and 9 native-display tests skipped; syntax/whitespace checks pass. Providers are simulated; no real API key or paid request is used. Browser visual acceptance remains pending because the local Chromium download failed. GitHub Linux/Windows, native and package results must be checked for the final commit before publication.
+
+## Syllabus references regression
+
+AE 416 provider prompts and module References must contain Paler-Calmorin, Adanza and Sevilla, with SYL-1/2/3 IDs, and no injected agencies/publishers. Tests check aviation/strength-of-materials topics do not infer references, supplied bibliography URLs survive across arbitrary domains, invented URLs (including former catalog URLs) are marked, absent readings are flagged, and bibliography heading aliases are recognized. Existing lesson/key, full-syllabus/hour, Secrets, checkpoint and persistence tests remain required. All provider responses are simulated; real-book content and live teaching quality are unverified. Check final Linux/Windows/native/package CI before publication.

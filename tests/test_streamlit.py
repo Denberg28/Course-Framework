@@ -4,6 +4,7 @@ from unittest.mock import patch
 from streamlit.testing.v1 import AppTest
 from course_core import CourseError
 from test_workflow import background_response, response
+from engines import ProviderUnavailable
 
 
 class StreamlitTests(unittest.TestCase):
@@ -137,6 +138,23 @@ class StreamlitTests(unittest.TestCase):
                 self.assertEqual(send.call_count, 4)
             self.assertEqual(self.app.session_state['generation_status']['completed'], 5)
             self.assertEqual(self.app.session_state['content'], 'Keep accepted material')
+
+    def test_flash_503_retries_only_the_current_module(self):
+        self.click('Example')
+        self.app.selectbox(key='model_choice').select('gemini-3.8-flash').run()
+        self.app.text_input(key='api_key').set_value('fake-key').run()
+        self.app.checkbox(key='online_consent').check().run()
+        self.app.session_state['content'] = 'Keep accepted material'
+        replies = [background_response(), ProviderUnavailable('HTTP 503'), *[background_response()] * 4]
+        with patch('engines.time.sleep'), patch('engines.request_json', side_effect=replies) as send:
+            self.click('Generate')
+            self.assertEqual(send.call_count, 6)
+            prompts = [c.args[2]['input'] for c in send.call_args_list]
+            self.assertIn('ONLY module 1:', prompts[0])
+            self.assertIn('ONLY module 2:', prompts[1])
+            self.assertEqual(prompts[1], prompts[2])
+        self.assertEqual(len(self.app.session_state['pending']['completed']), 5)
+        self.assertEqual(self.app.session_state['content'], 'Keep accepted material')
 
     def test_direct_generate_use_edit_and_download_survive_rerun(self):
         self.assertEqual(len(self.app.tabs), 0)

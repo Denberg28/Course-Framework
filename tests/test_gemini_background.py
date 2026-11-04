@@ -8,7 +8,7 @@ from urllib.error import HTTPError
 
 from course_core import CourseError
 from course_workflow import advance, new_job
-from engines import INTERACTIONS_URL, EngineConfig, TransientEngineError, generate_course
+from engines import INTERACTIONS_URL, EngineConfig, ProviderUnavailable, TransientEngineError, generate_course
 from test_workflow import MODULE, background_response
 
 
@@ -79,14 +79,15 @@ class GeminiBackgroundTests(unittest.TestCase):
         self.assertNotIn('Private summary', job['completed'][0])
 
     def test_transient_poll_failure_checks_the_same_interaction_without_reposting(self):
-        replies = [{'id': 'int_drone', 'status': 'in_progress'}, TransientEngineError('timeout'),
+        replies = [{'id': 'int_drone', 'status': 'in_progress'}, ProviderUnavailable('HTTP 503', retry_after=12),
                    background_response('Finished lesson'), TransientEngineError('cleanup timed out')]
         progress = []
-        with patch('engines.request_json', side_effect=replies) as send, patch('engines.time.sleep'), \
+        with patch('engines.request_json', side_effect=replies) as send, patch('engines.time.sleep') as sleep, \
                 patch('engines.time.monotonic', side_effect=[0, 5, 200]):
             text = generate_course(SOURCE, '', self.config, on_progress=progress.append)
         self.assertEqual(text, 'Finished lesson\n')
         self.assertEqual(progress, ['in_progress', 'reconnecting'])
+        self.assertEqual([c.args[0] for c in sleep.call_args_list], [5, 12])
         self.assertEqual([c.args[0] for c in send.call_args_list],
                          [INTERACTIONS_URL, *[f'{INTERACTIONS_URL}/int_drone'] * 3])
         self.assertEqual(send.call_args.kwargs['method'], 'DELETE')
@@ -151,3 +152,31 @@ class GeminiBackgroundTests(unittest.TestCase):
                 generate_course(SOURCE, '', self.config)
             self.assertNotIn('fake-secret', str(error.exception))
             send.assert_called_once()
+
+    def test_explicit_http_503_retries_identical_direct_request(self):
+        config = EngineConfig('Google AI Studio (Gemini)', 'fake-secret', 'gemini-3.8-flash')
+        overloaded = HTTPError(INTERACTIONS_URL, 503, 'fake-secret', {'Retry-After': '4'}, io.BytesIO())
+        success = io.BytesIO(json.dumps(background_response(MODULE)).encode())
+        progress = []
+        with patch('engines.build_opener') as opener, patch('engines.time.sleep') as sleep:
+            send = opener.return_value.open
+            send.side_effect = [overloaded, success]
+            job = advance(new_job(SOURCE, '', config), config, on_progress=progress.append)
+        self.assertEqual(len(job['completed']), 1)
+        self.assertEqual(progress, ['retrying'])
+        sleep.assert_called_once_with(4)
+        first, second = [c.args[0] for c in send.call_args_list]
+        self.assertEqual(first.data, second.data)
+        payload = json.loads(second.data)
+        self.assertEqual(payload['model'], 'gemini-3.8-flash')
+        self.assertEqual(payload['generation_config']['thinking_level'], 'medium')
+        self.assertIn(SOURCE, payload['input'])
+
+    def test_retry_budget_and_long_retry_after_stop_without_extra_calls(self):
+        for wait, calls, delays in [(0, 3, [2, 6]), (90, 1, [])]:
+            with self.subTest(wait=wait), patch('engines.time.sleep') as sleep, \
+                    patch('engines.request_json', side_effect=ProviderUnavailable('HTTP 503', wait)) as send:
+                with self.assertRaisesRegex(CourseError, 'HTTP 503'):
+                    generate_course(SOURCE, '', self.config)
+                self.assertEqual(send.call_count, calls)
+                self.assertEqual([c.args[0] for c in sleep.call_args_list], delays)

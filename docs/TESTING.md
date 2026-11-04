@@ -90,3 +90,7 @@ Local Python 3.12: 80 tests discovered, 69 passed and 11 native-display skips. F
 ## Gemini 3.8 background regression
 
 A local HTTP server accepts the exact two-line drone syllabus, acknowledges one POST, and returns queued, running and completed results through GET status checks. Verify the output excludes echoed input and thought content. Simulate a dropped status read, confirm the same interaction is read again, and assert the POST count stays at one. Verify deletion is attempted after retrieval and a cleanup failure preserves the draft. Verify known Google HTTP 400 rejections are sanitized. Check malformed IDs, unexpected and incomplete results, bounds, and credential reflection. Chromium verifies the provider status above the disabled action and then verifies completion. CI uses no Google credentials or real Google calls.
+
+## Gemini 3.8 overload recovery
+
+Inject an HTTP 503 and check that the request repeats the same model, full source and medium reasoning. Check Retry-After and the maximum attempts. Verify that ambiguous submissions stop, background status reads reuse the interaction ID, and Streamlit retries only the active module while preserving accepted material. The browser fixture verifies visible retry progress.

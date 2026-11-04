@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from email.utils import parsedate_to_datetime
+from math import ceil
 import ipaddress
 import json
 import re
@@ -84,6 +86,24 @@ class TransientEngineError(CourseError):
     """A transport failure that can be retried for read-only status checks."""
 
 
+class ProviderUnavailable(TransientEngineError):
+    """An explicit HTTP 503, distinct from an ambiguous transport failure."""
+
+    def __init__(self, message, retry_after=0):
+        super().__init__(message)
+        self.retry_after = retry_after
+
+
+def _retry_after(headers):
+    value = headers.get("Retry-After", "") if headers else ""
+    try:
+        if value.isascii() and value.isdecimal():
+            return int(value)
+        return max(0, ceil(parsedate_to_datetime(value).timestamp() - time.time()))
+    except (ValueError, TypeError, OverflowError, OSError):
+        return 0
+
+
 def request_json(url: str, headers: dict, payload: dict | None, *, timeout: int = 60, method=None) -> dict:
     request = Request(url, data=None if payload is None else json.dumps(payload).encode("utf-8"),
                       headers={"Content-Type": "application/json", **headers},
@@ -106,7 +126,7 @@ def request_json(url: str, headers: dict, payload: dict | None, *, timeout: int 
             403: "Access denied. Check the key's permissions and model access.",
             404: "Model or endpoint not found. Check the model ID and base URL.",
             429: "Provider quota or rate limit reached. Check the provider account before retrying.",
-            503: "The provider is temporarily unavailable (HTTP 503). Completed modules are kept; try Resume later.",
+            503: "The provider is temporarily unavailable (HTTP 503). Completed modules are kept.",
             504: "The provider timed out (HTTP 504). Completed modules are kept; try Resume later.",
         }
         # Do not surface bodies, URLs, exceptions, or headers that may echo a key.
@@ -116,7 +136,9 @@ def request_json(url: str, headers: dict, payload: dict | None, *, timeout: int 
                       (url == INTERACTIONS_URL or url.startswith(INTERACTIONS_URL + "/")) else None)
         finally:
             error.close()
-        error_type = TransientEngineError if status in (408, 500, 502, 503, 504) else CourseError
+        if status == 503:
+            raise ProviderUnavailable(messages[503], _retry_after(error.headers)) from None
+        error_type = TransientEngineError if status in (408, 500, 502, 504) else CourseError
         raise error_type(detail or messages.get(status, f"The engine returned HTTP {status}. Try again later.")) from None
     except TimeoutError:
         raise TransientEngineError(f"The engine did not respond within the {timeout}-second connection/read timeout. Completed modules are kept.") from None
@@ -133,6 +155,8 @@ def request_json(url: str, headers: dict, payload: dict | None, *, timeout: int 
 INTERACTIONS_URL = "https://generativelanguage.googleapis.com/v1beta/interactions"
 FLASH_OUTPUT_LIMIT = 32768
 FLASH_POLL_INTERVAL = 5
+FLASH_RETRY_DELAYS = (2, 6)
+FLASH_MAX_RETRY_WAIT = 30
 BACKGROUND_DISCLOSURE = ("3.8 Flash runs on Google in the background. Google stores the request and result for retrieval. "
                          "The app requests deletion after retrieval. Your Google account’s retention settings can apply if cleanup fails.")
 
@@ -180,6 +204,23 @@ def _interaction_failure_reason(result):
     return "Google supplied no recognized failure reason."
 
 
+def _submit_flash(send, headers, payload, on_progress):
+    # Only an explicit overload response permits another POST.
+    timeout = 45 if payload["background"] else 180
+    for attempt in range(len(FLASH_RETRY_DELAYS) + 1):
+        try:
+            return send(INTERACTIONS_URL, headers, payload, timeout=timeout)
+        except ProviderUnavailable as error:
+            if attempt == len(FLASH_RETRY_DELAYS):
+                raise
+            delay = max(FLASH_RETRY_DELAYS[attempt], error.retry_after)
+            if delay > FLASH_MAX_RETRY_WAIT:
+                raise
+            if on_progress:
+                on_progress("retrying")
+            time.sleep(delay)
+
+
 def _flash_interaction(system, prompt, key, send, on_progress, *, background, cleanup):
     headers = {"x-goog-api-key": key, "Api-Revision": "2026-05-20"}
     payload = {
@@ -191,11 +232,13 @@ def _flash_interaction(system, prompt, key, send, on_progress, *, background, cl
         "generation_config": {"thinking_level": "medium", "max_output_tokens": FLASH_OUTPUT_LIMIT},
     }
     try:
-        result = send(INTERACTIONS_URL, headers, payload, timeout=45 if background else 180)
+        result = _submit_flash(send, headers, payload, on_progress)
+    except ProviderUnavailable as error:
+        raise CourseError(f"{error} Try Generate or Resume later.") from None
     except CourseError as error:
         mode = "background" if background else "direct"
         raise CourseError(f"The Gemini {mode} request did not complete. {error} "
-                          "No automatic resubmission was made.") from None
+                          "The app stopped before making another attempt.") from None
 
     status = result.get("status")
     interaction = result.get("id")
@@ -208,20 +251,25 @@ def _flash_interaction(system, prompt, key, send, on_progress, *, background, cl
         phase = status
         if on_progress:
             on_progress(phase)
+        poll_delay = FLASH_POLL_INTERVAL
         while status in ("queued", "in_progress"):
             remaining = deadline - time.monotonic()
-            if remaining <= FLASH_POLL_INTERVAL:
+            if remaining <= poll_delay:
                 raise CourseError("Gemini did not finish within the 15-minute background wait. "
                                   "Google may still be processing the module. Completed modules are kept.")
-            time.sleep(FLASH_POLL_INTERVAL)
+            time.sleep(poll_delay)
             try:
-                result = send(status_url, headers, None, timeout=min(20, max(1, int(remaining - FLASH_POLL_INTERVAL))))
-            except TransientEngineError:
+                result = send(status_url, headers, None, timeout=min(20, max(1, int(remaining - poll_delay))))
+            except TransientEngineError as error:
                 # Reading the same interaction again cannot start a second generation.
                 if on_progress and phase != "reconnecting":
                     on_progress("reconnecting")
                 phase = "reconnecting"
+                poll_delay = min(FLASH_MAX_RETRY_WAIT, poll_delay * 2)
+                if isinstance(error, ProviderUnavailable):
+                    poll_delay = max(poll_delay, error.retry_after)
                 continue
+            poll_delay = FLASH_POLL_INTERVAL
             status = result.get("status")
             if on_progress and status in ("queued", "in_progress") and phase != status:
                 phase = status

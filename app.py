@@ -152,12 +152,13 @@ def generate():
             number = job['indices'][len(job['completed'])] + 1
             status['text'] = f"Generating module {number} · {status['completed']}/{status['total']} complete"
             bar.progress(status['completed'] / status['total'], text=status['text'])
-            def background_status(phase):
+            def provider_status(phase):
                 label = {'queued': 'Google queued', 'in_progress': 'Google is generating',
-                         'reconnecting': 'Reconnecting to Google for'}[phase]
+                         'reconnecting': 'Reconnecting to Google for',
+                         'retrying': 'Google is busy. Retrying'}[phase]
                 status['text'] = f"{label} module {number} · {status['completed']}/{status['total']} complete"
                 bar.progress(status['completed'] / status['total'], text=status['text'])
-            job = advance(job, cfg, on_progress=background_status)
+            job = advance(job, cfg, on_progress=provider_status)
             state.pending = job  # Commit each successful module before requesting the next.
             status['completed'] = len(job['completed'])
         status['text'] = f"Draft ready · {status['completed']}/{status['total']} complete"
@@ -252,7 +253,7 @@ with st.container(key='syllabus_input'):
     model = state.custom_model if state.model_choice == CUSTOM_MODEL else state.model_choice
     if EngineConfig(state.provider, model=model).is_gemini_flash:
         st.checkbox('Run 3.8 Flash in the background', key='flash_background',
-                    on_change=clear_generation_status, help='The direct connection is the default. Both modes use medium reasoning.')
+                    on_change=clear_generation_status, help='Both modes use medium reasoning and retry an explicit Google 503 up to twice.')
         if state.flash_background:
             st.caption(BACKGROUND_DISCLOSURE)
     if state.provider != PROVIDERS[0]:

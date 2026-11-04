@@ -121,10 +121,10 @@ class DesktopTests(unittest.TestCase):
         self.local_sample()
         started, release = threading.Event(), threading.Event()
         real_advance = advance
-        def slow_step(job, cfg):
+        def slow_step(job, cfg, **kwargs):
             started.set()
             release.wait(timeout=3)
-            return real_advance(job, cfg)
+            return real_advance(job, cfg, **kwargs)
         with patch('desktop.advance', side_effect=slow_step) as call:
             self.app.start()
             self.assertTrue(started.wait(timeout=1))

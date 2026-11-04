@@ -1,7 +1,7 @@
-# Course Framework 0.3.12-rc.1 — Direct and background connections for 3.8 Flash
+# Course Framework 0.3.13-rc.1 — Gemini 3.8 overload recovery
 
-Gemini 3.8 Flash defaults to a direct Interactions request. In a hosted test, Google accepted the previous background submission and then returned a failed terminal status. The background route remains available as an explicit option. The app shows a safe failure reason when Google provides a recognized error code.
+Both 3.8 Flash routes retry the current module up to twice after an explicit Google HTTP 503. The app shows retry progress and waits between attempts. It preserves the full syllabus, module instructions, medium reasoning and the 32,768-token allowance. An acknowledged background interaction is checked again without a new generation submission.
 
-Both modes keep medium reasoning, the complete syllabus and lesson prompt, and the 32,768-token allowance. Flash-Lite is the startup default. Background mode stores the interaction for retrieval and requests deletion after a terminal response. Existing drafts and completed module checkpoints are preserved.
+Persistent overload, quota errors and uncertain submissions can stop generation. Completed modules and accepted material are preserved for review or resume.
 
 This is an unsigned Windows prerelease. Extract the whole ZIP before running CourseFramework.exe.

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.10-rc.1 — Run 3.8 Flash modules in the background
+
+- Submit one Google Interactions request per selected module and poll its status. Retry transient status reads against the same interaction. Show queue, generation and reconnecting status above Generate.
+- Preserve medium reasoning, the full syllabus and lesson scope, the 32,768-token ceiling, and completed module checkpoints. Keep 3.5 Flash-Lite as the default.
+- Disclose Google's temporary retrieval storage for background requests. Test the exact one-module drone outline using a real local HTTP submission and status checks.
+
 ## 0.3.9-rc.1 — Stream 3.8 modules without reducing reasoning
 
 - Keep 3.8 Flash at medium reasoning with the same full-source lesson prompt and 32768-token allowance. Use streamGenerateContent SSE instead of waiting for one whole JSON response.

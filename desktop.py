@@ -15,7 +15,7 @@ from academy_theme import FIELD, INK, LINE, PAPER, WARM, apply_desktop_theme
 from course_core import (CourseError, SAMPLE, VERSION, analyze_syllabus, atomic_write,
                          export_bundle, export_html, extract_text, load_project,
                          make_project, project_bytes, read_file, topic_allocation)
-from engines import EngineConfig, PROVIDERS
+from engines import BACKGROUND_DISCLOSURE, EngineConfig, PROVIDERS
 from course_workflow import GEMINI_MODELS, accept_job, advance, can_resume, draft_text, is_complete, new_job
 
 
@@ -91,7 +91,16 @@ class CourseMaker:
         ttk.Button(self.input_panel, text='Settings…', command=self.toggle_settings).pack(anchor='w', pady=(0, 3))
         self.scope_picker = ttk.Combobox(self.input_panel, textvariable=self.scope, state='readonly', values=['All modules'])
         self.scope_picker.pack(fill='x', pady=(6, 4))
-        ttk.Checkbutton(self.input_panel, text='Send syllabus to agent · fees/quota may apply', variable=self.consent).pack(anchor='w', pady=(0, 5))
+        consent_box = ttk.Checkbutton(self.input_panel, text='Send syllabus to agent · fees/quota may apply', variable=self.consent)
+        consent_box.pack(anchor='w', pady=(0, 5))
+        disclosure = ttk.Label(self.input_panel, text=BACKGROUND_DISCLOSURE, style='Muted.TLabel', wraplength=300)
+        def show_disclosure(*_):
+            if self.config().uses_background:
+                disclosure.pack(before=consent_box, anchor='w', pady=(0, 5))
+            else:
+                disclosure.pack_forget()
+        self.model.trace_add('write', show_disclosure)
+        self.provider.trace_add('write', show_disclosure)
         actions = ttk.Frame(self.input_panel)
         actions.pack(fill='x')
         self.generate_button = ttk.Button(actions, text='Generate', style='Accent.TButton', command=self.start)

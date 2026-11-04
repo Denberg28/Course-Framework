@@ -1,12 +1,11 @@
 """Full-width Streamlit authoring: paste the full syllabus, generate, preview below."""
 from pathlib import Path
-import time
 import streamlit as st
 
 from academy_theme import streamlit_css, streamlit_header
 from course_core import (CourseError, VERSION, analyze_syllabus, course_allocation, export_bundle,
                          extract_text, load_project, make_project, project_bytes)
-from engines import EngineConfig, GEMINI_FLASH_MODEL, PROVIDERS
+from engines import BACKGROUND_DISCLOSURE, EngineConfig, PROVIDERS
 from hosted_keys import gemini_secret
 from lesson_format import presentation_parts
 from course_workflow import (CUSTOM_MODEL, GEMINI_MODELS, accept_job, advance, can_resume,
@@ -152,20 +151,12 @@ def generate():
             number = job['indices'][len(job['completed'])] + 1
             status['text'] = f"Generating module {number} · {status['completed']}/{status['total']} complete"
             bar.progress(status['completed'] / status['total'], text=status['text'])
-            last_update = 0.0
-            def receiving(characters):
-                nonlocal last_update
-                now = time.monotonic()
-                if now - last_update < .2:
-                    return
-                last_update = now
-                phase = f'Receiving module {number}' if characters else f'Working on module {number}'
-                status['text'] = f"{phase} · {status['completed']}/{status['total']} complete · {characters:,} characters received"
+            def background_status(phase):
+                label = {'queued': 'Google queued', 'in_progress': 'Google is generating',
+                         'reconnecting': 'Reconnecting to Google for'}[phase]
+                status['text'] = f"{label} module {number} · {status['completed']}/{status['total']} complete"
                 bar.progress(status['completed'] / status['total'], text=status['text'])
-            if cfg.provider == PROVIDERS[1] and cfg.model.strip().removeprefix('models/') == GEMINI_FLASH_MODEL:
-                job = advance(job, cfg, on_progress=receiving)
-            else:
-                job = advance(job, cfg)
+            job = advance(job, cfg, on_progress=background_status)
             state.pending = job  # Commit each successful module before requesting the next.
             status['completed'] = len(job['completed'])
         status['text'] = f"Draft ready · {status['completed']}/{status['total']} complete"
@@ -257,6 +248,9 @@ with st.container(key='syllabus_input'):
         key.text_input('API key', type='password', key='api_key')
     if state.model_choice == CUSTOM_MODEL:
         st.text_input('Model ID', key='custom_model', placeholder='Provider model ID', on_change=clear_generation_status)
+    model = state.custom_model if state.model_choice == CUSTOM_MODEL else state.model_choice
+    if EngineConfig(state.provider, model=model).uses_background:
+        st.caption(BACKGROUND_DISCLOSURE)
     if state.provider != PROVIDERS[0]:
         st.checkbox('Send syllabus to this agent (fees/quota may apply)', key='online_consent')
     try:

@@ -5,7 +5,8 @@ from unittest.mock import patch
 from urllib.error import HTTPError, URLError
 
 from course_core import CourseError, SAMPLE
-from engines import EngineConfig, NoRedirect, generate_course, request_json, validate_endpoint
+from engines import INTERACTIONS_URL, EngineConfig, NoRedirect, generate_course, request_json, validate_endpoint
+from test_workflow import background_response
 
 
 class EngineTests(unittest.TestCase):
@@ -28,21 +29,23 @@ class EngineTests(unittest.TestCase):
     def test_flash_reasoning_settings_reach_the_request_wrapper(self):
         answer = {'candidates': [{'finishReason': 'STOP', 'content': {'parts': [{'text': 'Final lesson'}]}}]}
         for model in ('gemini-3.8-flash', 'models/gemini-3.8-flash', 'gemini-3.5-flash-lite', 'custom-model'):
-            with self.subTest(model=model), patch('engines.request_json', return_value=answer) as send:
+            is_flash = model.removeprefix('models/') == 'gemini-3.8-flash'
+            with self.subTest(model=model), patch('engines.request_json', return_value=background_response() if is_flash else answer) as send:
                 generate_course(SAMPLE, '', EngineConfig('Google AI Studio (Gemini)', 'fake-secret', model))
-                is_flash = model.removeprefix('models/') == 'gemini-3.8-flash'
-                self.assertEqual(send.call_args.kwargs['timeout'], 180 if is_flash else 60)
-                settings = send.call_args.args[2]['generationConfig']
-                self.assertEqual(settings['maxOutputTokens'], 32768 if is_flash else 16384)
+                url, headers, payload = send.call_args.args
+                self.assertNotIn('fake-secret', url)
                 if is_flash:
-                    self.assertEqual(settings['thinkingConfig'], {'thinkingLevel': 'medium', 'includeThoughts': True})
-                    self.assertIn(':streamGenerateContent?alt=sse', send.call_args.args[0])
-                    self.assertTrue(send.call_args.kwargs['stream'])
-                    self.assertEqual(send.call_args.args[1]['Accept'], 'text/event-stream')
+                    self.assertEqual(url, INTERACTIONS_URL)
+                    self.assertEqual(headers['Api-Revision'], '2026-05-20')
+                    self.assertEqual(send.call_args.kwargs['timeout'], 45)
+                    self.assertEqual(payload['generation_config'], {'max_output_tokens': 32768, 'thinking_level': 'medium'})
+                    self.assertEqual(payload['model'], 'gemini-3.8-flash')
+                    self.assertTrue(payload['background'])
+                    self.assertFalse(payload['store'])
+                    self.assertIn(SAMPLE, payload['input'])
                 else:
-                    self.assertNotIn('thinkingConfig', settings)
-                    self.assertNotIn('stream', send.call_args.kwargs)
-                self.assertNotIn('fake-secret', send.call_args.args[0])
+                    self.assertIn(':generateContent', url)
+                    self.assertEqual(payload['generationConfig'], {'maxOutputTokens': 16384})
 
     def test_extended_timeout_is_applied_once_and_errors_are_distinct(self):
         for error in (TimeoutError('fake-secret'), URLError(TimeoutError('fake-secret')),
@@ -63,8 +66,8 @@ class EngineTests(unittest.TestCase):
                     self.assertIn('Could not connect', message)
 
     def test_gemini_finish_reasons_do_not_conflate_limits_and_blocks(self):
-        cfg = EngineConfig('Google AI Studio (Gemini)', 'fake-secret', 'gemini-3.8-flash')
-        for reason, expected in [('MAX_TOKENS', '32,768-token'), ('CONTINUATION', 'Automatic extra requests are off'),
+        cfg = EngineConfig('Google AI Studio (Gemini)', 'fake-secret')
+        for reason, expected in [('MAX_TOKENS', '16,384-token'), ('CONTINUATION', 'Automatic extra requests are off'),
                                  ('SAFETY', 'content policy'), ('RECITATION', 'source recitation'),
                                  ('fake-secret', 'stopped before completing')]:
             answer = {'candidates': [{'finishReason': reason, 'content': {'parts': [{'text': 'Incomplete content'}]}}]}

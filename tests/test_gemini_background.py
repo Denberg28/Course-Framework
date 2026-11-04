@@ -1,8 +1,10 @@
+import io
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import threading
 import unittest
 from unittest.mock import patch
+from urllib.error import HTTPError
 
 from course_core import CourseError
 from course_workflow import advance, new_job
@@ -48,6 +50,11 @@ class GeminiBackgroundTests(unittest.TestCase):
                                            {'type': 'thought', 'content': [{'type': 'text', 'text': 'Private summary'}]}]
                     self.reply(result)
 
+            def do_DELETE(self):
+                requests.append((self.command, self.path, self.headers['x-goog-api-key'], None))
+                self.send_response(204)
+                self.end_headers()
+
         server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
         thread = threading.Thread(target=server.serve_forever, kwargs={'poll_interval': .01}, daemon=True)
         thread.start()
@@ -62,17 +69,18 @@ class GeminiBackgroundTests(unittest.TestCase):
             thread.join(2)
 
         self.assertEqual(progress, ['queued', 'in_progress'])
-        self.assertEqual([request[0] for request in requests], ['POST', 'GET', 'GET'])
+        self.assertEqual([request[0] for request in requests], ['POST', 'GET', 'GET', 'DELETE'])
         self.assertIn(SOURCE, requests[0][3]['input'])
         self.assertIn('ONLY module 1: drone componenta', requests[0][3]['input'])
-        self.assertEqual(requests[1:], [('GET', '/v1beta/interactions/int_drone', 'fake-secret', None)] * 2)
+        self.assertEqual(requests[1:], [('GET', '/v1beta/interactions/int_drone', 'fake-secret', None)] * 2
+                         + [('DELETE', '/v1beta/interactions/int_drone', 'fake-secret', None)])
         self.assertEqual(len(job['completed']), 1)
         self.assertIn('## Module 1: drone componenta', job['completed'][0])
         self.assertNotIn('Private summary', job['completed'][0])
 
     def test_transient_poll_failure_checks_the_same_interaction_without_reposting(self):
         replies = [{'id': 'int_drone', 'status': 'in_progress'}, TransientEngineError('timeout'),
-                   background_response('Finished lesson')]
+                   background_response('Finished lesson'), TransientEngineError('cleanup timed out')]
         progress = []
         with patch('engines.request_json', side_effect=replies) as send, patch('engines.time.sleep'), \
                 patch('engines.time.monotonic', side_effect=[0, 5, 200]):
@@ -80,7 +88,8 @@ class GeminiBackgroundTests(unittest.TestCase):
         self.assertEqual(text, 'Finished lesson\n')
         self.assertEqual(progress, ['in_progress', 'reconnecting'])
         self.assertEqual([c.args[0] for c in send.call_args_list],
-                         [INTERACTIONS_URL, *[f'{INTERACTIONS_URL}/int_drone'] * 2])
+                         [INTERACTIONS_URL, *[f'{INTERACTIONS_URL}/int_drone'] * 3])
+        self.assertEqual(send.call_args.kwargs['method'], 'DELETE')
         self.assertTrue(all(c.args[2] is None for c in send.call_args_list[1:]))
 
     def test_failed_or_uncertain_submission_is_not_replayed(self):
@@ -110,3 +119,13 @@ class GeminiBackgroundTests(unittest.TestCase):
                 self.assertRaisesRegex(CourseError, '15-minute'):
             generate_course(SOURCE, '', self.config)
         self.assertEqual(send.call_count, 1)
+
+    def test_live_style_storage_rejection_is_distinguished_and_sanitized(self):
+        body = io.BytesIO(b'{"error":{"message":"Background interactions require store=true. fake-secret"}}')
+        failure = HTTPError(INTERACTIONS_URL, 400, 'fake-secret', {}, body)
+        with patch('engines.build_opener') as opener:
+            opener.return_value.open.side_effect = failure
+            with self.assertRaisesRegex(CourseError, 'storage settings.*HTTP 400') as error:
+                generate_course(SOURCE, '', self.config)
+            self.assertNotIn('fake-secret', str(error.exception))
+            self.assertEqual(opener.return_value.open.call_count, 1)

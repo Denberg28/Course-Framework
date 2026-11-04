@@ -71,7 +71,7 @@ Local Python 3.12: 69 tests discovered, 59 passed and 10 native-display tests sk
 
 ## Gemini 3.8 request and failure regression
 
-Verify the 3.8 preset and models/ alias use the Google Interactions endpoint with background mode, temporary retrieval storage, medium reasoning and max_output_tokens 32768. Lite/custom settings remain on generateContent. Mock the HTTP opener to assert timeout forwarding and sanitized transport errors. The Streamlit regression preserves completed modules and accepted material after a submission failure or incomplete result and resumes only the remaining modules.
+Verify the 3.8 preset and models/ alias use the Google Interactions endpoint with background mode, retrieval storage, medium reasoning and max_output_tokens 32768. Lite/custom settings remain on generateContent. Mock the HTTP opener to assert timeout forwarding and sanitized transport errors. The Streamlit regression preserves completed modules and accepted material after a submission failure or incomplete result and resumes only the remaining modules.
 
 ## Direct paste-to-Generate regression
 
@@ -89,4 +89,4 @@ Local Python 3.12: 80 tests discovered, 69 passed and 11 native-display skips. F
 
 ## Gemini 3.8 background regression
 
-A local HTTP server accepts the exact two-line drone syllabus, acknowledges one POST, and returns queued, running and completed results through GET status checks. Verify the output excludes echoed input and thought content. Simulate a dropped status read, confirm the same interaction is read again, and assert the POST count stays at one. Check malformed IDs, unexpected and incomplete results, bounds, and credential reflection. Chromium verifies the provider status above the disabled action and then verifies completion. CI uses no Google credentials or real Google calls.
+A local HTTP server accepts the exact two-line drone syllabus, acknowledges one POST, and returns queued, running and completed results through GET status checks. Verify the output excludes echoed input and thought content. Simulate a dropped status read, confirm the same interaction is read again, and assert the POST count stays at one. Verify deletion is attempted after retrieval and a cleanup failure preserves the draft. Verify known Google HTTP 400 rejections are sanitized. Check malformed IDs, unexpected and incomplete results, bounds, and credential reflection. Chromium verifies the provider status above the disabled action and then verifies completion. CI uses no Google credentials or real Google calls.

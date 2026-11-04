@@ -41,7 +41,7 @@ class EngineTests(unittest.TestCase):
                     self.assertEqual(payload['generation_config'], {'max_output_tokens': 32768, 'thinking_level': 'medium'})
                     self.assertEqual(payload['model'], 'gemini-3.8-flash')
                     self.assertTrue(payload['background'])
-                    self.assertFalse(payload['store'])
+                    self.assertTrue(payload['store'])
                     self.assertIn(SAMPLE, payload['input'])
                 else:
                     self.assertIn(':generateContent', url)

@@ -15,16 +15,18 @@ import hosted_keys
 from test_workflow import background_response, response
 
 
-def simulated_request(url, headers, payload, *, timeout=60):
+def simulated_request(url, headers, payload, *, timeout=60, method=None):
     # No credential, URL or prompt is logged or sent anywhere.
     if not url.startswith('https://generativelanguage.googleapis.com/'):
         raise engines.CourseError('The UI fixture supports simulated Gemini requests only.')
     if url == engines.INTERACTIONS_URL:
         if timeout != 45 or payload.get('generation_config') != {
-                'max_output_tokens': 32768, 'thinking_level': 'medium'} or not payload.get('background') or payload.get('store') is not False:
+                'max_output_tokens': 32768, 'thinking_level': 'medium'} or not payload.get('background') or payload.get('store') is not True:
             raise engines.CourseError('The 3.8 Flash request did not use its background reasoning settings.')
-        return background_response(status='in_progress')
+        return {'id': 'int_test', 'status': 'in_progress'}
     if url == f'{engines.INTERACTIONS_URL}/int_test' and payload is None:
+        if method == 'DELETE':
+            return {}
         time.sleep(.9)
         return background_response()
     time.sleep(1.2)

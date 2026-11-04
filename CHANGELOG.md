@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.11-rc.1 — Accept Google background storage requirements
+
+- Submit 3.8 background jobs with Google interaction storage enabled and request cleanup after retrieving a terminal result. A cleanup failure preserves the completed draft.
+- Distinguish known Google HTTP 400 rejections without exposing provider messages. Keep medium reasoning and the existing lesson prompt.
+
 ## 0.3.10-rc.1 — Run 3.8 Flash modules in the background
 
 - Submit one Google Interactions request per selected module and poll its status. Retry transient status reads against the same interaction. Show queue, generation and reconnecting status above Generate.

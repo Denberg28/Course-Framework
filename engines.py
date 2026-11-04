@@ -83,12 +83,14 @@ class TransientEngineError(CourseError):
     """A transport failure that can be retried for read-only status checks."""
 
 
-def request_json(url: str, headers: dict, payload: dict | None, *, timeout: int = 60) -> dict:
+def request_json(url: str, headers: dict, payload: dict | None, *, timeout: int = 60, method=None) -> dict:
     request = Request(url, data=None if payload is None else json.dumps(payload).encode("utf-8"),
                       headers={"Content-Type": "application/json", **headers},
-                      method="GET" if payload is None else "POST")
+                      method=method or ("GET" if payload is None else "POST"))
     try:
         with build_opener(NoRedirect()).open(request, timeout=timeout) as response:
+            if method == "DELETE":
+                return {}
             raw = response.read(2 * 1024 * 1024 + 1)
             if len(raw) > 2 * 1024 * 1024:
                 raise CourseError("The engine response exceeded the 2 MB limit. Generate a smaller course section.")
@@ -98,7 +100,7 @@ def request_json(url: str, headers: dict, payload: dict | None, *, timeout: int 
         return result
     except HTTPError as error:
         messages = {
-            400: "Request rejected. Check the model, API format, and syllabus size.",
+            400: "Request rejected (HTTP 400). Check the model, API format, and syllabus size.",
             401: "Authentication failed. Check the API key and selected provider.",
             403: "Access denied. Check the key's permissions and model access.",
             404: "Model or endpoint not found. Check the model ID and base URL.",
@@ -108,9 +110,13 @@ def request_json(url: str, headers: dict, payload: dict | None, *, timeout: int 
         }
         # Do not surface bodies, URLs, exceptions, or headers that may echo a key.
         status = error.code
-        error.close()
+        try:
+            detail = (_interaction_rejection(error) if status == 400 and
+                      (url == INTERACTIONS_URL or url.startswith(INTERACTIONS_URL + "/")) else None)
+        finally:
+            error.close()
         error_type = TransientEngineError if status in (408, 500, 502, 503, 504) else CourseError
-        raise error_type(messages.get(status, f"The engine returned HTTP {status}. Try again later.")) from None
+        raise error_type(detail or messages.get(status, f"The engine returned HTTP {status}. Try again later.")) from None
     except TimeoutError:
         raise TransientEngineError(f"The engine did not respond within the {timeout}-second connection/read timeout. Completed modules are kept.") from None
     except URLError as error:
@@ -126,17 +132,35 @@ def request_json(url: str, headers: dict, payload: dict | None, *, timeout: int 
 INTERACTIONS_URL = "https://generativelanguage.googleapis.com/v1beta/interactions"
 FLASH_OUTPUT_LIMIT = 32768
 FLASH_POLL_INTERVAL = 5
-BACKGROUND_DISCLOSURE = "3.8 Flash runs on Google in the background. Google can keep the request and result for up to 24 hours for retrieval."
+BACKGROUND_DISCLOSURE = ("3.8 Flash runs on Google in the background. Google stores the request and result for retrieval. "
+                         "The app requests deletion after retrieval. Your Google account’s retention settings can apply if cleanup fails.")
 
 
-def _background_flash(system, prompt, key, send, on_progress):
+def _interaction_rejection(error):
+    """Translate a few known Google rejections without exposing the response body."""
+    try:
+        message = json.loads(error.read(16384))["error"]["message"].lower()
+    except (ValueError, OSError, KeyError, TypeError, AttributeError, RecursionError):
+        return None
+    if "background" in message and "store" in message:
+        return "Google rejected the storage settings for background generation (HTTP 400)."
+    if "background" in message and "support" in message:
+        return "Google reported that this model cannot run in the background for this request (HTTP 400)."
+    if "multiple authentication credentials" in message:
+        return "Google rejected authentication for the background interaction (HTTP 400)."
+    if "api key" in message and ("not valid" in message or "invalid" in message):
+        return "Google rejected the API key for the background interaction (HTTP 400)."
+    return None
+
+
+def _background_flash(system, prompt, key, send, on_progress, cleanup):
     headers = {"x-goog-api-key": key, "Api-Revision": "2026-05-20"}
     payload = {
         "model": GEMINI_FLASH_MODEL,
         "system_instruction": system,
         "input": prompt,
         "background": True,
-        "store": False,
+        "store": True,
         "generation_config": {"thinking_level": "medium", "max_output_tokens": FLASH_OUTPUT_LIMIT},
     }
     try:
@@ -146,11 +170,12 @@ def _background_flash(system, prompt, key, send, on_progress):
                           "No automatic resubmission was made.") from None
 
     status = result.get("status")
+    interaction = result.get("id")
+    valid_id = isinstance(interaction, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,512}", interaction) and key not in interaction
+    status_url = f"{INTERACTIONS_URL}/{interaction}" if valid_id else None
     if status in ("queued", "in_progress"):
-        interaction = result.get("id")
-        if not isinstance(interaction, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,512}", interaction) or key in interaction:
+        if not status_url:
             raise CourseError("Gemini returned an invalid background request ID.")
-        status_url = f"{INTERACTIONS_URL}/{interaction}"
         deadline = time.monotonic() + 900
         phase = status
         if on_progress:
@@ -173,6 +198,12 @@ def _background_flash(system, prompt, key, send, on_progress):
             if on_progress and status in ("queued", "in_progress") and phase != status:
                 phase = status
                 on_progress(phase)
+
+    if cleanup and status_url and status in ("completed", "failed", "cancelled", "incomplete", "budget_exceeded"):
+        try:
+            send(status_url, headers, None, timeout=3, method="DELETE")
+        except CourseError:
+            pass  # Retrieval succeeded. A cleanup error must not discard the result.
 
     if status in ("incomplete", "budget_exceeded"):
         raise CourseError("Gemini returned an incomplete background result. "
@@ -278,7 +309,7 @@ def generate_course(syllabus: str, title: str, config: EngineConfig, *, draft: s
         else:
             def send_background(url, headers, payload, *, timeout):
                 return transport(url, headers, payload)
-        text = _background_flash(system, prompt, config.api_key.strip(), send_background, on_progress)
+        text = _background_flash(system, prompt, config.api_key.strip(), send_background, on_progress, cleanup=transport is None)
     elif config.provider == "Google AI Studio (Gemini)":
         model = config.model.strip().removeprefix("models/")
         output_limit = 16384

@@ -64,7 +64,7 @@ def response(text=MODULE):
 
 
 def background_response(text=MODULE, status='completed'):
-    return {'id': 'int_test', 'status': status,
+    return {'status': status,
             'steps': [{'type': 'model_output', 'content': [{'type': 'text', 'text': text}]}]}
 
 

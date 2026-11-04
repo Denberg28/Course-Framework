@@ -15,7 +15,11 @@ import hosted_keys
 from test_workflow import background_response, response
 
 
+background_rejected = False
+
+
 def simulated_request(url, headers, payload, *, timeout=60, method=None):
+    global background_rejected
     # No credential, URL or prompt is logged or sent anywhere.
     if not url.startswith('https://generativelanguage.googleapis.com/'):
         raise engines.CourseError('The UI fixture supports simulated Gemini requests only.')
@@ -24,6 +28,9 @@ def simulated_request(url, headers, payload, *, timeout=60, method=None):
         if timeout != (45 if background else 180) or payload.get('generation_config') != {
                 'max_output_tokens': 32768, 'thinking_level': 'medium'} or payload.get('store') is not background:
             raise engines.CourseError('The 3.8 Flash request did not use its background reasoning settings.')
+        if background and not background_rejected:
+            background_rejected = True
+            raise engines.ProviderUnavailable('Simulated HTTP 503')
         return {'id': 'int_test', 'status': 'in_progress'} if background else background_response()
     if url == f'{engines.INTERACTIONS_URL}/int_test' and payload is None:
         if method == 'DELETE':
@@ -37,6 +44,7 @@ def simulated_request(url, headers, payload, *, timeout=60, method=None):
 
 
 engines.FLASH_POLL_INTERVAL = .35
+engines.FLASH_RETRY_DELAYS = (.9, 1.5)
 engines.request_json = simulated_request
 hosted_keys.gemini_secret = lambda secrets: 'fake-ui-deployment-key'
 runpy.run_path(str(ROOT / 'app.py'), run_name='__main__')

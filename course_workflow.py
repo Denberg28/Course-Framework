@@ -76,7 +76,7 @@ def draft_text(job):
 
 
 def advance(job, config, *, transport=None, on_progress=None):
-    """Return a new checkpoint only after the next module succeeds. Never retry a paid call."""
+    """Return a new checkpoint only after the next module succeeds."""
     job = validate_pending(job)
     if job['profile'] != profile(config):
         raise CourseError('The generation format, agent model, or endpoint changed. Start a new draft to use it.')

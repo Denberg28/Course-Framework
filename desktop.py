@@ -366,8 +366,11 @@ class CourseMaker:
             def worker():
                 current = job
                 try:
+                    def provider_status(phase):
+                        if phase == 'retrying':
+                            self.results.put(('retrying', None))
                     while not is_complete(current) and not self.pause_event.is_set():
-                        current = advance(current, cfg)
+                        current = advance(current, cfg, on_progress=provider_status)
                         self.results.put(('progress', current))
                     self.results.put(('done', None))
                 except CourseError as error:
@@ -386,7 +389,10 @@ class CourseMaker:
     def poll(self):
         try:
             kind, value = self.results.get_nowait()
-            if kind == 'progress':
+            if kind == 'retrying':
+                if not self.pause_event.is_set():
+                    self.status.set('Google is busy. Retrying the current module…')
+            elif kind == 'progress':
                 self.job = value
                 self.refresh_draft()
                 self.mark_dirty()

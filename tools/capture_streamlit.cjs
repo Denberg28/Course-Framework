@@ -115,6 +115,7 @@ async function main() {
       await busy.waitFor();
       assert.equal(await busy.isEnabled(), false);
       const status = page.locator('.st-key-generation_status');
+      if (background) await status.getByText(/Google is busy. Retrying module/).waitFor();
       await status.getByText(background ? /Google is generating module/ : /Generating module/).waitFor();
       const position = await status.evaluate(el => {
         const b = document.querySelector('.st-key-generation_controls button');

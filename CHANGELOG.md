@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.13-rc.1 — Recover from transient Gemini 3.8 Flash overload
+
+- Retry the current module up to twice after an explicit Google HTTP 503 in either 3.8 mode. Back off between attempts and honor short provider retry delays.
+- Back off when an acknowledged background status read fails and continue reading the same job.
+- Show retry progress and retain completed module checkpoints, the selected model, medium reasoning and the full prompt. Timeouts or uncertain submissions stop without replay.
+
 ## 0.3.12-rc.1 — Direct and background connections for 3.8 Flash
 
 - Default 3.8 Flash to the direct Interactions route after a hosted background job returned a failed status. Offer background generation as a per-session option.

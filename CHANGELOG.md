@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.12-rc.1 — Direct and background connections for 3.8 Flash
+
+- Default 3.8 Flash to the direct Interactions route after a hosted background job returned a failed status. Offer background generation as a per-session option.
+- Keep medium reasoning, the complete lesson prompt and the 32,768-token ceiling in both routes. Show allowlisted provider failure details when present.
+
 ## 0.3.11-rc.1 — Accept Google background storage requirements
 
 - Submit 3.8 background jobs with Google interaction storage enabled and request cleanup after retrieving a terminal result. A cleanup failure preserves the completed draft.

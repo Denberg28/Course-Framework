@@ -17,7 +17,7 @@ SOURCE = 'drone 101\n1. drone componenta'
 
 class GeminiBackgroundTests(unittest.TestCase):
     def setUp(self):
-        self.config = EngineConfig('Google AI Studio (Gemini)', 'fake-secret', 'gemini-3.8-flash')
+        self.config = EngineConfig('Google AI Studio (Gemini)', 'fake-secret', 'gemini-3.8-flash', flash_background=True)
 
     def test_single_post_and_real_http_poll_for_the_exact_drone_outline(self):
         requests = []
@@ -129,3 +129,25 @@ class GeminiBackgroundTests(unittest.TestCase):
                 generate_course(SOURCE, '', self.config)
             self.assertNotIn('fake-secret', str(error.exception))
             self.assertEqual(opener.return_value.open.call_count, 1)
+
+    def test_direct_flash_keeps_the_same_medium_reasoning_prompt(self):
+        config = EngineConfig('Google AI Studio (Gemini)', 'fake-secret', 'gemini-3.8-flash')
+        with patch('engines.request_json', return_value=background_response(MODULE)) as send:
+            job = advance(new_job(SOURCE, '', config), config)
+        send.assert_called_once()
+        self.assertEqual(send.call_args.args[0], INTERACTIONS_URL)
+        self.assertEqual(send.call_args.kwargs['timeout'], 180)
+        payload = send.call_args.args[2]
+        self.assertFalse(payload['background'])
+        self.assertFalse(payload['store'])
+        self.assertEqual(payload['generation_config'], {'thinking_level': 'medium', 'max_output_tokens': 32768})
+        self.assertIn(SOURCE, payload['input'])
+        self.assertEqual(len(job['completed']), 1)
+
+    def test_failed_background_result_reports_only_allowlisted_reason(self):
+        result = {'status': 'failed', 'errors': [{'code': 'RESOURCE_EXHAUSTED', 'message': 'fake-secret'}]}
+        with patch('engines.request_json', return_value=result) as send:
+            with self.assertRaisesRegex(CourseError, 'quota or capacity limit') as error:
+                generate_course(SOURCE, '', self.config)
+            self.assertNotIn('fake-secret', str(error.exception))
+            send.assert_called_once()

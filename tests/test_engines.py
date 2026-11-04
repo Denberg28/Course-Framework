@@ -31,7 +31,7 @@ class EngineTests(unittest.TestCase):
         for model in ('gemini-3.8-flash', 'models/gemini-3.8-flash', 'gemini-3.5-flash-lite', 'custom-model'):
             is_flash = model.removeprefix('models/') == 'gemini-3.8-flash'
             with self.subTest(model=model), patch('engines.request_json', return_value=background_response() if is_flash else answer) as send:
-                generate_course(SAMPLE, '', EngineConfig('Google AI Studio (Gemini)', 'fake-secret', model))
+                generate_course(SAMPLE, '', EngineConfig('Google AI Studio (Gemini)', 'fake-secret', model, flash_background=is_flash))
                 url, headers, payload = send.call_args.args
                 self.assertNotIn('fake-secret', url)
                 if is_flash:

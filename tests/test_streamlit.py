@@ -103,7 +103,8 @@ class StreamlitTests(unittest.TestCase):
         with patch('engines.request_json', return_value=background_response()) as send:
             self.click('Generate')
             self.assertTrue(send.call_args.args[0].endswith('/v1beta/interactions'))
-            self.assertEqual(send.call_args.kwargs['timeout'], 45)
+            self.assertEqual(send.call_args.kwargs['timeout'], 180)
+            self.assertFalse(send.call_args.args[2]['background'])
             self.assertEqual(send.call_args.args[2]['generation_config']['thinking_level'], 'medium')
         self.assertEqual(self.app.session_state['pending']['model'], 'gemini-3.8-flash')
         self.app.run()
@@ -112,6 +113,7 @@ class StreamlitTests(unittest.TestCase):
     def test_flash_timeout_or_token_limit_keeps_checkpoint_and_resume(self):
         self.click('Example')
         self.app.selectbox(key='model_choice').select('gemini-3.8-flash').run()
+        self.app.checkbox(key='flash_background').check().run()
         self.app.text_input(key='api_key').set_value('fake-key').run()
         self.app.checkbox(key='online_consent').check().run()
         self.app.session_state['content'] = 'Keep accepted material'

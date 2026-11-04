@@ -1,7 +1,7 @@
-# Course Framework 0.3.11-rc.1 — Background generation for 3.8 Flash
+# Course Framework 0.3.12-rc.1 — Direct and background connections for 3.8 Flash
 
-Gemini 3.8 Flash submits each module to Google's background Interactions API and polls for completion. A temporary status-check failure triggers another read of the same interaction. The app shows Google queue and generation status above Generate. Flash-Lite remains the default.
+Gemini 3.8 Flash defaults to a direct Interactions request. In a hosted test, Google accepted the previous background submission and then returned a failed terminal status. The background route remains available as an explicit option. The app shows a safe failure reason when Google provides a recognized error code.
 
-3.8 Flash keeps medium reasoning, the full syllabus, the existing lesson format and the 32,768-token allowance. Google stores the background request and result for retrieval. The app requests deletion after a terminal result. The Google account’s retention settings can apply if cleanup fails. The app keeps completed modules and accepted course material and stages the finished draft for instructor review. It sends no automatic replacement generation request.
+Both modes keep medium reasoning, the complete syllabus and lesson prompt, and the 32,768-token allowance. Flash-Lite is the startup default. Background mode stores the interaction for retrieval and requests deletion after a terminal response. Existing drafts and completed module checkpoints are preserved.
 
-The exact `drone 101` and `1. drone componenta` input is covered by a local HTTP integration test. Live provider availability still depends on the configured key, model access, quota and service availability. This is an unsigned Windows prerelease. Extract the whole ZIP before running CourseFramework.exe.
+This is an unsigned Windows prerelease. Extract the whole ZIP before running CourseFramework.exe.

@@ -71,7 +71,7 @@ Local Python 3.12: 69 tests discovered, 59 passed and 10 native-display tests sk
 
 ## Gemini 3.8 request and failure regression
 
-Verify the 3.8 preset and models/ alias use the Google Interactions endpoint with background mode, retrieval storage, medium reasoning and max_output_tokens 32768. Lite/custom settings remain on generateContent. Mock the HTTP opener to assert timeout forwarding and sanitized transport errors. The Streamlit regression preserves completed modules and accepted material after a submission failure or incomplete result and resumes only the remaining modules.
+Verify the 3.8 preset and models/ alias use the Google Interactions endpoint with medium reasoning and max_output_tokens 32768 in both direct and background modes. Only background mode enables retrieval storage. Verify that recognized terminal failure codes produce fixed messages. Lite/custom settings remain on generateContent. Mock the HTTP opener to assert timeout forwarding and sanitized transport errors. The Streamlit regression preserves completed modules and accepted material after a submission failure or incomplete result and resumes only the remaining modules.
 
 ## Direct paste-to-Generate regression
 

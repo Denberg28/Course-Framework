@@ -17,7 +17,7 @@ DEFAULTS = {'source': '', 'course_title': '', 'content': '', 'engine_used': 'Loc
             'model_used': '', 'accepted_source': '', 'pending': None, 'provider': PROVIDERS[1],
             'api_key': '', 'model_choice': GEMINI_MODELS[0], 'custom_model': '',
             'endpoint': 'https://api.openai.com/v1', 'notice': '', 'notice_error': False,
-            'online_consent': False, 'replace_course': False,
+            'online_consent': False, 'replace_course': False, 'flash_background': False,
             'generation_requested': False, 'generation_status': None}
 for key, value in DEFAULTS.items():
     if key not in st.session_state:
@@ -67,7 +67,8 @@ def config():
     key = state.get('api_key', '')
     if state.provider == PROVIDERS[1]:
         key = gemini_secret(st.secrets) or key
-    return EngineConfig(state.provider, key, model, state.get('endpoint', 'https://api.openai.com/v1'))
+    return EngineConfig(state.provider, key, model, state.get('endpoint', 'https://api.openai.com/v1'),
+                        flash_background=state.get('flash_background', False))
 
 
 def project():
@@ -249,8 +250,11 @@ with st.container(key='syllabus_input'):
     if state.model_choice == CUSTOM_MODEL:
         st.text_input('Model ID', key='custom_model', placeholder='Provider model ID', on_change=clear_generation_status)
     model = state.custom_model if state.model_choice == CUSTOM_MODEL else state.model_choice
-    if EngineConfig(state.provider, model=model).uses_background:
-        st.caption(BACKGROUND_DISCLOSURE)
+    if EngineConfig(state.provider, model=model).is_gemini_flash:
+        st.checkbox('Run 3.8 Flash in the background', key='flash_background',
+                    on_change=clear_generation_status, help='The direct connection is the default. Both modes use medium reasoning.')
+        if state.flash_background:
+            st.caption(BACKGROUND_DISCLOSURE)
     if state.provider != PROVIDERS[0]:
         st.checkbox('Send syllabus to this agent (fees/quota may apply)', key='online_consent')
     try:

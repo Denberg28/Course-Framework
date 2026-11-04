@@ -130,6 +130,8 @@ async function main() {
       await page.getByRole('button', { name: 'Generate', exact: true }).waitFor();
     }
     await choose('Agent model', 'gemini-3.8-flash');
+    await page.getByText('Run 3.8 Flash in the background', { exact: true }).click();
+    await page.getByText(/Google stores the request and result for retrieval/).waitFor();
     await captureGeneration('streamlit-generation-desktop.png', true);
     await choose('Agent model', 'gemini-3.5-flash-lite');
     await page.setViewportSize({ width: 390, height: 844 });

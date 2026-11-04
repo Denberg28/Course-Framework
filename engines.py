@@ -45,9 +45,10 @@ class EngineConfig:
     model: str = DEFAULT_GEMINI_MODEL
     base_url: str = "https://api.openai.com/v1"
     allow_local: bool = False
+    flash_background: bool = False
 
     @property
-    def uses_background(self):
+    def is_gemini_flash(self):
         return self.provider == PROVIDERS[1] and self.model.strip().removeprefix("models/") == GEMINI_FLASH_MODEL
 
 
@@ -153,27 +154,54 @@ def _interaction_rejection(error):
     return None
 
 
-def _background_flash(system, prompt, key, send, on_progress, cleanup):
+def _interaction_failure_reason(result):
+    reasons = {
+        "invalid_argument": "Google rejected a request parameter during generation.",
+        "invalid_request": "Google rejected a request parameter during generation.",
+        "failed_precondition": "Check the Gemini project's API access and account prerequisites.",
+        "permission_denied": "Google denied access to the selected model or route.",
+        "resource_exhausted": "Google reported a quota or capacity limit.",
+        "rate_limit_exceeded": "Google reported a rate limit.",
+        "service_unavailable": "Google reported that the model is temporarily unavailable.",
+        "unavailable": "Google reported that the model is temporarily unavailable.",
+        "internal": "Google reported an internal model error.",
+        "api_error": "Google reported an internal API error.",
+        "deadline_exceeded": "Google reported a generation timeout.",
+        "gateway_timeout": "Google reported a generation timeout.",
+        "content_blocked": "Google blocked the output under its content policy.",
+    }
+    faults = result.get("errors")
+    for fault in faults if isinstance(faults, list) else [result.get("error")]:
+        code = fault.get("code") if isinstance(fault, dict) else None
+        if isinstance(code, str):
+            reason = reasons.get(code.rsplit("/", 1)[-1].lower())
+            if reason:
+                return reason
+    return "Google supplied no recognized failure reason."
+
+
+def _flash_interaction(system, prompt, key, send, on_progress, *, background, cleanup):
     headers = {"x-goog-api-key": key, "Api-Revision": "2026-05-20"}
     payload = {
         "model": GEMINI_FLASH_MODEL,
         "system_instruction": system,
         "input": prompt,
-        "background": True,
-        "store": True,
+        "background": background,
+        "store": background,
         "generation_config": {"thinking_level": "medium", "max_output_tokens": FLASH_OUTPUT_LIMIT},
     }
     try:
-        result = send(INTERACTIONS_URL, headers, payload, timeout=45)
+        result = send(INTERACTIONS_URL, headers, payload, timeout=45 if background else 180)
     except CourseError as error:
-        raise CourseError(f"Could not confirm submission of the Gemini background request. {error} "
+        mode = "background" if background else "direct"
+        raise CourseError(f"The Gemini {mode} request did not complete. {error} "
                           "No automatic resubmission was made.") from None
 
     status = result.get("status")
     interaction = result.get("id")
     valid_id = isinstance(interaction, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,512}", interaction) and key not in interaction
     status_url = f"{INTERACTIONS_URL}/{interaction}" if valid_id else None
-    if status in ("queued", "in_progress"):
+    if background and status in ("queued", "in_progress"):
         if not status_url:
             raise CourseError("Gemini returned an invalid background request ID.")
         deadline = time.monotonic() + 900
@@ -199,24 +227,26 @@ def _background_flash(system, prompt, key, send, on_progress, cleanup):
                 phase = status
                 on_progress(phase)
 
-    if cleanup and status_url and status in ("completed", "failed", "cancelled", "incomplete", "budget_exceeded"):
+    if background and cleanup and status_url and status in ("completed", "failed", "cancelled", "incomplete", "budget_exceeded"):
         try:
             send(status_url, headers, None, timeout=3, method="DELETE")
         except CourseError:
             pass  # Retrieval succeeded. A cleanup error must not discard the result.
 
     if status in ("incomplete", "budget_exceeded"):
-        raise CourseError("Gemini returned an incomplete background result. "
+        raise CourseError("Gemini returned an incomplete result. "
                           "The module was discarded and completed modules are kept.")
     if status != "completed":
         label = status if status in ("failed", "cancelled", "requires_action") else "unknown"
-        raise CourseError(f"Gemini background generation stopped (status: {label}). "
-                          "Completed modules are kept.")
+        mode = "background" if background else "direct"
+        reason = _interaction_failure_reason(result)
+        raise CourseError(f"Gemini {mode} generation stopped (status: {label}). "
+                          f"{reason} Completed modules are kept.")
     try:
         return "".join(part["text"] for step in result["steps"] if step["type"] == "model_output"
                        for part in step["content"] if part["type"] == "text")
     except (KeyError, TypeError):
-        raise CourseError("Gemini returned no usable text for the completed background request.") from None
+        raise CourseError("Gemini returned no usable text for the completed request.") from None
 
 
 def gemini_finish_error(reason, output_limit):
@@ -303,13 +333,14 @@ def generate_course(syllabus: str, title: str, config: EngineConfig, *, draft: s
                   "a resources section. References are appended by the app. Aim for about 600–900 words per module "
                   "including questions, with no conversational filler.")
     send = transport or request_json
-    if config.uses_background:
+    if config.is_gemini_flash:
         if transport is None:
-            send_background = request_json
+            send_interaction = request_json
         else:
-            def send_background(url, headers, payload, *, timeout):
+            def send_interaction(url, headers, payload, *, timeout):
                 return transport(url, headers, payload)
-        text = _background_flash(system, prompt, config.api_key.strip(), send_background, on_progress, cleanup=transport is None)
+        text = _flash_interaction(system, prompt, config.api_key.strip(), send_interaction, on_progress,
+                                  background=config.flash_background, cleanup=transport is None)
     elif config.provider == "Google AI Studio (Gemini)":
         model = config.model.strip().removeprefix("models/")
         output_limit = 16384

@@ -12,27 +12,28 @@ sys.path[:0] = [str(ROOT), str(ROOT / 'tests')]
 
 import engines
 import hosted_keys
-from test_workflow import response
+from test_workflow import background_response, response
 
 
-def simulated_request(url, headers, payload, *, timeout=60, stream=False, on_progress=None):
+def simulated_request(url, headers, payload, *, timeout=60):
     # No credential, URL or prompt is logged or sent anywhere.
     if not url.startswith('https://generativelanguage.googleapis.com/'):
         raise engines.CourseError('The UI fixture supports simulated Gemini requests only.')
-    if '/gemini-3.8-flash:' in url:
-        if timeout != 180 or payload.get('generationConfig') != {
-                'maxOutputTokens': 32768, 'thinkingConfig': {'thinkingLevel': 'medium', 'includeThoughts': True}} or not stream or ':streamGenerateContent?alt=sse' not in url:
-            raise engines.CourseError('The 3.8 Flash request did not use its reasoning settings.')
-        if on_progress:
-            on_progress(0)
-            time.sleep(.35)
-            on_progress(120)
+    if url == engines.INTERACTIONS_URL:
+        if timeout != 45 or payload.get('generation_config') != {
+                'max_output_tokens': 32768, 'thinking_level': 'medium'} or not payload.get('background') or payload.get('store') is not False:
+            raise engines.CourseError('The 3.8 Flash request did not use its background reasoning settings.')
+        return background_response(status='in_progress')
+    if url == f'{engines.INTERACTIONS_URL}/int_test' and payload is None:
+        time.sleep(.9)
+        return background_response()
     time.sleep(1.2)
     if 'drone 101' in payload['contents'][0]['parts'][0]['text']:
         return response('### Discussion\nIdentify drone components using a supplied diagram.\n\n### Activity\nLabel the diagram and explain each connection.')
     return response()
 
 
+engines.FLASH_POLL_INTERVAL = .35
 engines.request_json = simulated_request
 hosted_keys.gemini_secret = lambda secrets: 'fake-ui-deployment-key'
 runpy.run_path(str(ROOT / 'app.py'), run_name='__main__')

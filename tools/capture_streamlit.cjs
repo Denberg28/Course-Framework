@@ -109,13 +109,13 @@ async function main() {
     await page.getByText('Send syllabus to this agent (fees/quota may apply)', { exact: true }).click();
     await page.waitForFunction(() => document.querySelector('input[aria-label="Send syllabus to this agent (fees/quota may apply)"]')?.checked);
     assert.equal(await page.getByRole('checkbox', { name: 'Send syllabus to this agent (fees/quota may apply)', exact: true }).isChecked(), true);
-    async function captureGeneration(name, streaming = false) {
+    async function captureGeneration(name, background = false) {
       await page.getByRole('button', { name: 'Generate', exact: true }).click();
       const busy = page.getByRole('button', { name: 'Generating…', exact: true });
       await busy.waitFor();
       assert.equal(await busy.isEnabled(), false);
       const status = page.locator('.st-key-generation_status');
-      await status.getByText(streaming ? /Receiving module.*characters received/ : /Generating module/).waitFor();
+      await status.getByText(background ? /Google is generating module/ : /Generating module/).waitFor();
       const position = await status.evaluate(el => {
         const b = document.querySelector('.st-key-generation_controls button');
         const m = document.querySelector('[data-testid="stMain"]');

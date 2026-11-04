@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-import codecs
 import ipaddress
 import json
 import re
@@ -47,6 +46,10 @@ class EngineConfig:
     base_url: str = "https://api.openai.com/v1"
     allow_local: bool = False
 
+    @property
+    def uses_background(self):
+        return self.provider == PROVIDERS[1] and self.model.strip().removeprefix("models/") == GEMINI_FLASH_MODEL
+
 
 class NoRedirect(HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
@@ -76,102 +79,16 @@ def validate_endpoint(base_url: str, allow_local: bool) -> str:
     return url.geturl().rstrip("/")
 
 
-def _gemini_stream(response, on_progress, secret):
-    """Read bounded SSE deltas; never publish or checkpoint incomplete model text."""
-    decoder = codecs.getincrementaldecoder('utf-8')()
-    buffer, event, pieces = '', [], []
-    received, characters, finish = 0, 0, None
-    started = time.monotonic()
-
-    def consume():
-        nonlocal characters, finish
-        if not event:
-            return
-        data = '\n'.join(event)
-        event.clear()
-        if data.strip() == '[DONE]':
-            return
-        chunk = json.loads(data)
-        if not isinstance(chunk, dict):
-            raise CourseError('Gemini returned an unexpected stream format.')
-        if 'error' in chunk:
-            code = chunk['error'].get('code') if isinstance(chunk['error'], dict) else None
-            # Reuse sanitized status handling; do not echo any server message/body.
-            raise HTTPError('', code if type(code) is int else 502, '', {}, None)
-        candidates = chunk.get('candidates', [])
-        if not isinstance(candidates, list):
-            raise CourseError('Gemini returned an unexpected stream format.')
-        changed = False
-        for candidate in candidates:
-            if not isinstance(candidate, dict) or candidate.get('index', 0) != 0:
-                continue
-            if candidate.get('finishReason'):
-                finish = candidate['finishReason']
-            content = candidate.get('content', {})
-            if not isinstance(content, dict) or not isinstance(content.get('parts', []), list):
-                raise CourseError('Gemini returned an unexpected stream format.')
-            for part in content.get('parts', []):
-                if not isinstance(part, dict):
-                    raise CourseError('Gemini returned an unexpected stream format.')
-                if part.get('thought'):
-                    changed = True  # Activity only; never display or save thought summaries.
-                    continue
-                text = part.get('text', '')
-                if not isinstance(text, str):
-                    raise CourseError('Gemini returned an unexpected stream format.')
-                characters += len(text)
-                if characters > MAX_OUTPUT:
-                    raise CourseError('Gemini output exceeded the course text limit. Completed modules are preserved.')
-                pieces.append(text)
-                changed = changed or bool(text)
-        if changed and on_progress:
-            on_progress(characters)
-
-    def line(value):
-        if value.startswith('data:'):
-            event.append(value[5:].lstrip(' '))
-        elif not value:
-            consume()
-
-    def result():
-        text = ''.join(pieces)
-        if secret and secret in text:
-            raise CourseError('The engine response contained a credential and was discarded.')
-        return {'candidates': [{'finishReason': finish, 'content': {'parts': [{'text': text}]}}]}
-
-    if on_progress:
-        on_progress(0)
-    while True:
-        # Check between reads as well as enforcing a socket idle timeout.
-        if time.monotonic() - started > 900:
-            raise CourseError('Gemini stream exceeded the fifteen-minute response budget. Completed modules are preserved; no automatic retry was made.')
-        raw = response.read1(16384)
-        if not raw:
-            buffer += decoder.decode(b'', final=True)
-            if buffer:
-                line(buffer.rstrip('\r'))
-            consume()
-            break
-        received += len(raw)
-        if received > 2 * 1024 * 1024:
-            raise CourseError('The engine response exceeded the 2 MB limit. Generate a smaller course section.')
-        buffer += decoder.decode(raw)
-        while '\n' in buffer:
-            value, buffer = buffer.split('\n', 1)
-            line(value.rstrip('\r'))
-            if finish is not None:
-                return result()  # The model finished; do not wait for a proxy to close SSE.
-    return result()
+class TransientEngineError(CourseError):
+    """A transport failure that can be retried for read-only status checks."""
 
 
-def request_json(url: str, headers: dict, payload: dict, *, timeout: int = 60,
-                 stream: bool = False, on_progress=None) -> dict:
-    request = Request(url, data=json.dumps(payload).encode("utf-8"),
-                      headers={"Content-Type": "application/json", **headers}, method="POST")
+def request_json(url: str, headers: dict, payload: dict | None, *, timeout: int = 60) -> dict:
+    request = Request(url, data=None if payload is None else json.dumps(payload).encode("utf-8"),
+                      headers={"Content-Type": "application/json", **headers},
+                      method="GET" if payload is None else "POST")
     try:
         with build_opener(NoRedirect()).open(request, timeout=timeout) as response:
-            if stream:
-                return _gemini_stream(response, on_progress, headers.get('x-goog-api-key', ''))
             raw = response.read(2 * 1024 * 1024 + 1)
             if len(raw) > 2 * 1024 * 1024:
                 raise CourseError("The engine response exceeded the 2 MB limit. Generate a smaller course section.")
@@ -192,27 +109,83 @@ def request_json(url: str, headers: dict, payload: dict, *, timeout: int = 60,
         # Do not surface bodies, URLs, exceptions, or headers that may echo a key.
         status = error.code
         error.close()
-        raise CourseError(messages.get(status, f"The engine returned HTTP {status}. Try again later.")) from None
+        error_type = TransientEngineError if status in (408, 500, 502, 503, 504) else CourseError
+        raise error_type(messages.get(status, f"The engine returned HTTP {status}. Try again later.")) from None
     except TimeoutError:
-        phase = 'stream idle' if stream else 'connection/read'
-        raise CourseError(f"The engine did not respond within the {timeout}-second {phase} timeout. Completed modules are kept; Resume retries the unfinished module.") from None
+        raise TransientEngineError(f"The engine did not respond within the {timeout}-second connection/read timeout. Completed modules are kept.") from None
     except URLError as error:
         if isinstance(error.reason, TimeoutError):
-            phase = 'stream idle' if stream else 'connection/read'
-            raise CourseError(f"The engine did not respond within the {timeout}-second {phase} timeout. Completed modules are kept; Resume retries the unfinished module.") from None
-        raise CourseError("Could not connect to the engine. Check the network and endpoint.") from None
+            raise TransientEngineError(f"The engine did not respond within the {timeout}-second connection/read timeout. Completed modules are kept.") from None
+        raise TransientEngineError("Could not connect to the engine. Check the network and endpoint.") from None
     except OSError:
-        raise CourseError("The engine connection was interrupted. Completed modules are kept; check the network before resuming.") from None
+        raise TransientEngineError("The engine connection was interrupted. Completed modules are kept.") from None
     except (UnicodeError, json.JSONDecodeError, RecursionError):
         raise CourseError("The API returned invalid JSON. Check that the endpoint supports this provider format.") from None
 
 
-def gemini_request_settings(model):
-    """Give the known reasoning preset bounded headroom; custom IDs stay explicit."""
-    if model == GEMINI_FLASH_MODEL:
-        return 180, {'maxOutputTokens': 32768,
-                     'thinkingConfig': {'thinkingLevel': 'medium', 'includeThoughts': True}}
-    return 60, {'maxOutputTokens': 16384}
+INTERACTIONS_URL = "https://generativelanguage.googleapis.com/v1beta/interactions"
+FLASH_OUTPUT_LIMIT = 32768
+FLASH_POLL_INTERVAL = 5
+BACKGROUND_DISCLOSURE = "3.8 Flash runs on Google in the background. Google can keep the request and result for up to 24 hours for retrieval."
+
+
+def _background_flash(system, prompt, key, send, on_progress):
+    headers = {"x-goog-api-key": key, "Api-Revision": "2026-05-20"}
+    payload = {
+        "model": GEMINI_FLASH_MODEL,
+        "system_instruction": system,
+        "input": prompt,
+        "background": True,
+        "store": False,
+        "generation_config": {"thinking_level": "medium", "max_output_tokens": FLASH_OUTPUT_LIMIT},
+    }
+    try:
+        result = send(INTERACTIONS_URL, headers, payload, timeout=45)
+    except CourseError as error:
+        raise CourseError(f"Could not confirm submission of the Gemini background request. {error} "
+                          "No automatic resubmission was made.") from None
+
+    status = result.get("status")
+    if status in ("queued", "in_progress"):
+        interaction = result.get("id")
+        if not isinstance(interaction, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,512}", interaction) or key in interaction:
+            raise CourseError("Gemini returned an invalid background request ID.")
+        status_url = f"{INTERACTIONS_URL}/{interaction}"
+        deadline = time.monotonic() + 900
+        phase = status
+        if on_progress:
+            on_progress(phase)
+        while status in ("queued", "in_progress"):
+            remaining = deadline - time.monotonic()
+            if remaining <= FLASH_POLL_INTERVAL:
+                raise CourseError("Gemini did not finish within the 15-minute background wait. "
+                                  "Google may still be processing the module. Completed modules are kept.")
+            time.sleep(FLASH_POLL_INTERVAL)
+            try:
+                result = send(status_url, headers, None, timeout=min(20, max(1, int(remaining - FLASH_POLL_INTERVAL))))
+            except TransientEngineError:
+                # Reading the same interaction again cannot start a second generation.
+                if on_progress and phase != "reconnecting":
+                    on_progress("reconnecting")
+                phase = "reconnecting"
+                continue
+            status = result.get("status")
+            if on_progress and status in ("queued", "in_progress") and phase != status:
+                phase = status
+                on_progress(phase)
+
+    if status in ("incomplete", "budget_exceeded"):
+        raise CourseError("Gemini returned an incomplete background result. "
+                          "The module was discarded and completed modules are kept.")
+    if status != "completed":
+        label = status if status in ("failed", "cancelled", "requires_action") else "unknown"
+        raise CourseError(f"Gemini background generation stopped (status: {label}). "
+                          "Completed modules are kept.")
+    try:
+        return "".join(part["text"] for step in result["steps"] if step["type"] == "model_output"
+                       for part in step["content"] if part["type"] == "text")
+    except (KeyError, TypeError):
+        raise CourseError("Gemini returned no usable text for the completed background request.") from None
 
 
 def gemini_finish_error(reason, output_limit):
@@ -299,30 +272,26 @@ def generate_course(syllabus: str, title: str, config: EngineConfig, *, draft: s
                   "a resources section. References are appended by the app. Aim for about 600–900 words per module "
                   "including questions, with no conversational filler.")
     send = transport or request_json
-    if config.provider == "Google AI Studio (Gemini)":
+    if config.uses_background:
+        if transport is None:
+            send_background = request_json
+        else:
+            def send_background(url, headers, payload, *, timeout):
+                return transport(url, headers, payload)
+        text = _background_flash(system, prompt, config.api_key.strip(), send_background, on_progress)
+    elif config.provider == "Google AI Studio (Gemini)":
         model = config.model.strip().removeprefix("models/")
-        timeout, generation = gemini_request_settings(model)
-        streaming = model == GEMINI_FLASH_MODEL
-        method = 'streamGenerateContent?alt=sse' if streaming else 'generateContent'
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{quote(model, safe='')}:{method}"
-        payload = {
+        output_limit = 16384
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{quote(model, safe='')}:generateContent"
+        response = send(url, {"x-goog-api-key": config.api_key.strip()}, {
             "systemInstruction": {"parts": [{"text": system}]},
             "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-            "generationConfig": generation,
-        }
-        headers = {"x-goog-api-key": config.api_key.strip()}
-        if streaming:
-            headers['Accept'] = 'text/event-stream'
-        if transport is not None:
-            response = transport(url, headers, payload)
-        elif streaming:
-            response = request_json(url, headers, payload, timeout=timeout, stream=True, on_progress=on_progress)
-        else:
-            response = request_json(url, headers, payload, timeout=timeout)
+            "generationConfig": {"maxOutputTokens": output_limit},
+        })
         try:
             candidate = response["candidates"][0]
             if candidate.get("finishReason") != "STOP":
-                raise CourseError(gemini_finish_error(candidate.get('finishReason'), generation['maxOutputTokens']))
+                raise CourseError(gemini_finish_error(candidate.get('finishReason'), output_limit))
             text = "".join(p.get("text", "") for p in candidate["content"]["parts"] if not p.get("thought"))
         except (KeyError, IndexError, TypeError, AttributeError):
             raise CourseError("Gemini returned no usable text. Check model access or try a smaller section.") from None

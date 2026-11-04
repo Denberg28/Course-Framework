@@ -3,7 +3,7 @@ from pathlib import Path
 from unittest.mock import patch
 from streamlit.testing.v1 import AppTest
 from course_core import CourseError
-from test_workflow import response
+from test_workflow import background_response, response
 
 
 class StreamlitTests(unittest.TestCase):
@@ -100,12 +100,11 @@ class StreamlitTests(unittest.TestCase):
             self.click('Generate')
             self.assertIn('/gemini-3.5-flash-lite:generateContent', send.call_args.args[0])
         self.app.selectbox(key='model_choice').select('gemini-3.8-flash').run()
-        with patch('engines.request_json', return_value=response()) as send:
+        with patch('engines.request_json', return_value=background_response()) as send:
             self.click('Generate')
-            self.assertIn('/gemini-3.8-flash:streamGenerateContent?alt=sse', send.call_args.args[0])
-            self.assertEqual(send.call_args.kwargs['timeout'], 180)
-            self.assertEqual(send.call_args.args[2]['generationConfig']['thinkingConfig'], {'thinkingLevel': 'medium', 'includeThoughts': True})
-            self.assertTrue(send.call_args.kwargs['stream'])
+            self.assertTrue(send.call_args.args[0].endswith('/v1beta/interactions'))
+            self.assertEqual(send.call_args.kwargs['timeout'], 45)
+            self.assertEqual(send.call_args.args[2]['generation_config']['thinking_level'], 'medium')
         self.assertEqual(self.app.session_state['pending']['model'], 'gemini-3.8-flash')
         self.app.run()
         self.assertEqual(self.app.session_state['model_choice'], 'gemini-3.8-flash')
@@ -117,10 +116,10 @@ class StreamlitTests(unittest.TestCase):
         self.app.checkbox(key='online_consent').check().run()
         self.app.session_state['content'] = 'Keep accepted material'
         self.app.run()
-        cutoff = {'candidates': [{'finishReason': 'MAX_TOKENS', 'content': {'parts': [{'text': 'Partial lesson'}]}}]}
-        for failure in (CourseError('The engine did not respond within the 180-second connection/read timeout.'), cutoff):
+        cutoff = background_response('Partial lesson', 'incomplete')
+        for failure in (CourseError('The engine did not respond within the 45-second connection/read timeout.'), cutoff):
             # Each attempt starts fresh after the preceding test job finished.
-            with self.subTest(failure=type(failure)), patch('engines.request_json', side_effect=[response(), failure]) as send:
+            with self.subTest(failure=type(failure)), patch('engines.request_json', side_effect=[background_response(), failure]) as send:
                 self.click('Generate')
                 self.assertEqual(send.call_count, 2)
             self.assertEqual(self.app.session_state['generation_status']['completed'], 1)
@@ -128,10 +127,10 @@ class StreamlitTests(unittest.TestCase):
             self.assertEqual(len(self.app.session_state['pending']['completed']), 1)
             self.assertNotIn('Partial lesson', self.app.session_state['pending']['completed'][0])
             self.assertEqual(self.app.session_state['content'], 'Keep accepted material')
-            with patch('engines.request_json', return_value=response()) as send:
+            with patch('engines.request_json', return_value=background_response()) as send:
                 self.click('Resume')
                 self.assertEqual(send.call_count, 4)
-                self.assertTrue(all(c.kwargs['timeout'] == 180 for c in send.call_args_list))
+                self.assertTrue(all(c.kwargs['timeout'] == 45 for c in send.call_args_list))
                 self.app.run()
                 self.assertEqual(send.call_count, 4)
             self.assertEqual(self.app.session_state['generation_status']['completed'], 5)

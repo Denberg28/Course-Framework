@@ -155,8 +155,9 @@ def request_json(url: str, headers: dict, payload: dict | None, *, timeout: int 
 INTERACTIONS_URL = "https://generativelanguage.googleapis.com/v1beta/interactions"
 FLASH_OUTPUT_LIMIT = 32768
 FLASH_POLL_INTERVAL = 5
-FLASH_RETRY_DELAYS = (2, 6)
-FLASH_MAX_RETRY_WAIT = 30
+FLASH_RETRY_DELAYS = (10, 30)
+FLASH_MAX_RETRY_WAIT = 60
+FLASH_MAX_POLL_BACKOFF = 30
 BACKGROUND_DISCLOSURE = ("3.8 Flash runs on Google in the background. Google stores the request and result for retrieval. "
                          "The app requests deletion after retrieval. Your Google account’s retention settings can apply if cleanup fails.")
 
@@ -265,7 +266,7 @@ def _flash_interaction(system, prompt, key, send, on_progress, *, background, cl
                 if on_progress and phase != "reconnecting":
                     on_progress("reconnecting")
                 phase = "reconnecting"
-                poll_delay = min(FLASH_MAX_RETRY_WAIT, poll_delay * 2)
+                poll_delay = min(FLASH_MAX_POLL_BACKOFF, poll_delay * 2)
                 if isinstance(error, ProviderUnavailable):
                     poll_delay = max(poll_delay, error.retry_after)
                 continue

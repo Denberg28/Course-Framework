@@ -155,7 +155,7 @@ class GeminiBackgroundTests(unittest.TestCase):
 
     def test_explicit_http_503_retries_identical_direct_request(self):
         config = EngineConfig('Google AI Studio (Gemini)', 'fake-secret', 'gemini-3.8-flash')
-        overloaded = HTTPError(INTERACTIONS_URL, 503, 'fake-secret', {'Retry-After': '4'}, io.BytesIO())
+        overloaded = HTTPError(INTERACTIONS_URL, 503, 'fake-secret', {'Retry-After': '15'}, io.BytesIO())
         success = io.BytesIO(json.dumps(background_response(MODULE)).encode())
         progress = []
         with patch('engines.build_opener') as opener, patch('engines.time.sleep') as sleep:
@@ -164,7 +164,7 @@ class GeminiBackgroundTests(unittest.TestCase):
             job = advance(new_job(SOURCE, '', config), config, on_progress=progress.append)
         self.assertEqual(len(job['completed']), 1)
         self.assertEqual(progress, ['retrying'])
-        sleep.assert_called_once_with(4)
+        sleep.assert_called_once_with(15)
         first, second = [c.args[0] for c in send.call_args_list]
         self.assertEqual(first.data, second.data)
         payload = json.loads(second.data)
@@ -173,7 +173,7 @@ class GeminiBackgroundTests(unittest.TestCase):
         self.assertIn(SOURCE, payload['input'])
 
     def test_retry_budget_and_long_retry_after_stop_without_extra_calls(self):
-        for wait, calls, delays in [(0, 3, [2, 6]), (90, 1, [])]:
+        for wait, calls, delays in [(0, 3, [10, 30]), (90, 1, [])]:
             with self.subTest(wait=wait), patch('engines.time.sleep') as sleep, \
                     patch('engines.request_json', side_effect=ProviderUnavailable('HTTP 503', wait)) as send:
                 with self.assertRaisesRegex(CourseError, 'HTTP 503'):

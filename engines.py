@@ -20,6 +20,9 @@ from reference_catalog import reference_context
 PROVIDERS = ("Local template", "Google AI Studio (Gemini)", "OpenAI-compatible")
 DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite"
 GEMINI_FLASH_MODEL = "gemini-3.8-flash"
+ANTIGRAVITY_AGENT = "antigravity-preview-09-2026"
+INTERACTIONS_URL = "https://generativelanguage.googleapis.com/v1beta/interactions"
+ANTIGRAVITY_TOKEN_BUDGET = 50000
 SYSTEM = """You are an instructional designer creating an instructor-review course draft.
 Accept a single topic, an informal title/topic list, or a full syllabus. Formal course metadata,
 outcomes, hours and references are optional; their absence must not prevent module creation.
@@ -152,7 +155,7 @@ FLASH_RETRY_DELAYS = (10, 30)
 FLASH_MAX_RETRY_WAIT = 60
 
 
-def _submit_flash(send, url, headers, payload, on_progress):
+def _retry_overload(send, url, headers, payload, on_progress):
     # Only an explicit overload response permits another POST.
     for delay in FLASH_RETRY_DELAYS:
         try:
@@ -165,6 +168,26 @@ def _submit_flash(send, url, headers, payload, on_progress):
                 on_progress("retrying")
             time.sleep(delay)
     return send(url, headers, payload)
+
+
+def _antigravity_text(response):
+    status = response.get("status")
+    if status in ("incomplete", "budget_exceeded"):
+        raise CourseError("Antigravity stopped before finishing the module. It may have reached its token budget.")
+    if status != "completed":
+        raise CourseError("Antigravity did not complete the module. Check project access or try again later.")
+    steps = response.get("steps")
+    if not isinstance(steps, list):
+        raise CourseError("Antigravity returned an unexpected response format.")
+    for step in reversed(steps):
+        if not isinstance(step, dict) or step.get("type") != "model_output":
+            continue
+        content = step.get("content")
+        if isinstance(content, list):
+            return "".join(part["text"] for part in content if isinstance(part, dict)
+                           and part.get("type") == "text" and isinstance(part.get("text"), str))
+        break
+    raise CourseError("Antigravity returned no usable module text.")
 
 
 def gemini_finish_error(reason, output_limit):
@@ -251,7 +274,23 @@ def generate_course(syllabus: str, title: str, config: EngineConfig, *, draft: s
                   "a resources section. References are appended by the app. Aim for about 600–900 words per module "
                   "including questions, with no conversational filler.")
     send = transport or request_json
-    if config.provider == "Google AI Studio (Gemini)":
+    if config.provider == PROVIDERS[1] and config.model.strip() == ANTIGRAVITY_AGENT:
+        if transport is None:
+            send = partial(request_json, timeout=300)
+        response = _retry_overload(send, INTERACTIONS_URL, {
+            "x-goog-api-key": config.api_key.strip(), "Api-Revision": "2026-05-20",
+        }, {
+            "agent": ANTIGRAVITY_AGENT,
+            "agent_config": {"type": "antigravity", "model": DEFAULT_GEMINI_MODEL,
+                             "max_total_tokens": ANTIGRAVITY_TOKEN_BUDGET},
+            "environment": "remote",
+            "store": False,
+            "tools": [],
+            "system_instruction": system + "\nReturn only the requested Markdown. Use only the supplied source; do not browse, run code, or create files.",
+            "input": prompt,
+        }, on_progress)
+        text = _antigravity_text(response)
+    elif config.provider == PROVIDERS[1]:
         model = config.model.strip().removeprefix("models/")
         is_flash = config.is_gemini_flash
         output_limit = FLASH_OUTPUT_LIMIT if is_flash else 16384
@@ -268,7 +307,7 @@ def generate_course(syllabus: str, title: str, config: EngineConfig, *, draft: s
         if is_flash:
             if transport is None:
                 send = partial(request_json, timeout=FLASH_TIMEOUT)
-            response = _submit_flash(send, url, headers, payload, on_progress)
+            response = _retry_overload(send, url, headers, payload, on_progress)
         else:
             response = send(url, headers, payload)
         try:

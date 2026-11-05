@@ -12,24 +12,26 @@ sys.path[:0] = [str(ROOT), str(ROOT / 'tests')]
 
 import engines
 import hosted_keys
-from test_workflow import response
+from test_workflow import antigravity_response, response
 
 
-flash_rejected = False
+agent_rejected = False
 
 
 def simulated_request(url, headers, payload, *, timeout=60):
-    global flash_rejected
+    global agent_rejected
     # No credential, URL or prompt is logged or sent anywhere.
     if not url.startswith('https://generativelanguage.googleapis.com/'):
         raise engines.CourseError('The UI fixture supports simulated Gemini requests only.')
-    if url.endswith('/gemini-3.8-flash:generateContent'):
-        if timeout != 300 or payload.get('generationConfig') != {
-                'maxOutputTokens': 32768, 'thinkingConfig': {'thinkingLevel': 'high'}}:
-            raise engines.CourseError('The 3.8 Flash request did not use high reasoning.')
-        if not flash_rejected:
-            flash_rejected = True
+    if url == engines.INTERACTIONS_URL:
+        if timeout != 300 or payload.get('agent') != engines.ANTIGRAVITY_AGENT or payload.get('agent_config') != {
+                'type': 'antigravity', 'model': engines.DEFAULT_GEMINI_MODEL, 'max_total_tokens': 50000}:
+            raise engines.CourseError('The Antigravity request did not use its managed agent settings.')
+        if not agent_rejected:
+            agent_rejected = True
             raise engines.ProviderUnavailable('Simulated HTTP 503')
+        time.sleep(1.2)
+        return antigravity_response()
     time.sleep(1.2)
     if 'drone 101' in payload['contents'][0]['parts'][0]['text']:
         return response('### Discussion\nIdentify drone components using a supplied diagram.\n\n### Activity\nLabel the diagram and explain each connection.')

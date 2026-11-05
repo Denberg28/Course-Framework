@@ -233,7 +233,7 @@ with st.container(key='syllabus_input'):
         state.model_choice = options[0]
     agent.selectbox('Agent model', options, key='model_choice',
                     on_change=clear_generation_status,
-                    help='3.5 Flash-Lite is the default. Choose 3.8 Flash for demanding work. Availability and quotas depend on your provider account.')
+                    help='3.5 Flash-Lite is the default. Antigravity is a Google managed agent preview using 3.5 Flash-Lite. Project access, fees and quotas may differ.')
     hosted_key = ''
     if state.provider == PROVIDERS[1]:
         try:

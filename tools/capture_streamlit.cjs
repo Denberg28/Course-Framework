@@ -49,7 +49,7 @@ async function main() {
         .some(e => e.textContent.includes(label) && e.textContent.includes(value)), { label, value });
     }
     assert.ok((await select('Agent model').innerText()).includes('gemini-3.5-flash-lite'));
-    await choose('Agent model', 'gemini-3.8-flash');
+    await choose('Agent model', 'antigravity-preview-09-2026');
     await choose('Agent model', 'gemini-3.5-flash-lite');
     assert.equal(await page.getByRole('button', { name: 'Generate', exact: true }).isEnabled(), true);
     await page.getByText('Send syllabus to this agent (fees/quota may apply)', { exact: true }).click();
@@ -129,7 +129,7 @@ async function main() {
       await status.getByText('Draft ready · 5/5 complete', { exact: true }).waitFor();
       await page.getByRole('button', { name: 'Generate', exact: true }).waitFor();
     }
-    await choose('Agent model', 'gemini-3.8-flash');
+    await choose('Agent model', 'antigravity-preview-09-2026');
     await captureGeneration('streamlit-generation-desktop.png', true);
     await choose('Agent model', 'gemini-3.5-flash-lite');
     await page.setViewportSize({ width: 390, height: 844 });

@@ -1,5 +1,5 @@
-# Course Framework 0.3.14-rc.1 — One-click Gemini 3.8 Flash generation
+# Course Framework 0.3.15-rc.1 — Antigravity Preview
 
-Select Gemini 3.8 Flash and click Generate in Streamlit or Windows. The app uses the same Google `generateContent` route as Flash-Lite, with high reasoning, the full teaching prompt, and a 300-second connection/read timeout. It retries an explicit Google HTTP 503 up to twice and keeps completed modules for Resume.
+Antigravity Preview replaces the standalone 3.8 Flash preset in Streamlit and Windows. Gemini 3.5 Flash-Lite remains the default and also powers the Antigravity preset. The agent uses the same syllabus and teaching instructions through Google’s managed agent API.
 
-Live provider availability and teaching quality remain unverified. This is an unsigned Windows prerelease. Extract the whole ZIP before running CourseFramework.exe.
+Existing 3.8 projects remain readable and resumable via the custom model route. Antigravity access, quotas and fees depend on the Gemini API project. The agent has a best-effort token budget per module. This is an unsigned Windows prerelease. Extract the whole ZIP before running CourseFramework.exe.

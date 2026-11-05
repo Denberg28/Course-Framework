@@ -63,6 +63,10 @@ def response(text=MODULE, finish_reason='STOP'):
     return {'candidates': [{'finishReason': finish_reason, 'content': {'parts': [{'text': text}]}}]}
 
 
+def antigravity_response(text=MODULE, status='completed'):
+    return {'status': status, 'steps': [{'type': 'model_output', 'content': [{'type': 'text', 'text': text}]}]}
+
+
 class WorkflowTests(unittest.TestCase):
     def setUp(self):
         self.config = EngineConfig('Google AI Studio (Gemini)', 'fake-secret', 'gemini-3.8-flash')

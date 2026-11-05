@@ -49,7 +49,7 @@ AE 416 provider prompts and module References must contain Paler-Calmorin, Adanz
 
 ## Default model and Streamlit browser gate
 
-The shared adapter and fresh Streamlit/native sessions default to 3.5 Flash-Lite. A simulated request verifies its actual endpoint, then selects 3.8 Flash and verifies that endpoint and preserved selection. Provider resets return to Lite; saved jobs keep their model. Existing consent/Secrets/generation/outline/reference/persistence tests remain required.
+The shared adapter and fresh Streamlit/native sessions default to 3.5 Flash-Lite. A simulated request verifies its actual endpoint, then selects Antigravity and verifies the Interactions endpoint and preserved selection. Provider resets return to Lite; saved jobs keep their model. Existing consent/Secrets/generation/outline/reference/persistence tests remain required.
 
 The `streamlit-browser` CI job installs Playwright 1.62.1 only as test tooling, starts the real app, verifies model selection, pastes AE 416, generates offline without credentials and downloads Markdown. It checks desktop/mobile horizontal overflow, the main scroll container, anchor navigation, closed assessment, hidden mobile illustration and reduced-motion scrolling. Desktop/mobile PNGs and the explicitly offline placeholder draft are retained as `CourseFramework-Streamlit-review`. Windows packaging waits for both the source/native regression job and this browser job. Browser checks do not validate live model quality or manual accessibility; inspect the final-run screenshots for visual review.
 
@@ -71,7 +71,7 @@ Local Python 3.12: 69 tests discovered, 59 passed and 10 native-display tests sk
 
 ## Gemini 3.8 request and failure regression
 
-Verify both Gemini presets use `generateContent` and send identical teaching prompts. Verify the 3.8 preset and `models/` alias send high reasoning, a 32,768-token allowance and a 300-second connection/read timeout. Lite and custom settings keep the 16,384-token allowance and default timeout. The Streamlit regression preserves completed modules and accepted material after a timeout or token limit and resumes only the remaining modules.
+Verify standard Gemini model IDs use `generateContent` and send identical teaching prompts. Verify the legacy 3.8 ID and `models/` alias send high reasoning, a 32,768-token allowance and a 300-second connection/read timeout. Lite and custom settings keep the 16,384-token allowance and default timeout. The Streamlit regression preserves completed modules and accepted material after a timeout or token limit and resumes only the remaining modules.
 
 ## Direct paste-to-Generate regression
 
@@ -89,4 +89,8 @@ Local Python 3.12: 80 tests discovered, 69 passed and 11 native-display skips. F
 
 ## Gemini 3.8 overload recovery
 
-Inject HTTP 503 while generating the exact one-module Drone 101 outline. Verify the retry repeats the model, full source and high reasoning and the completed response becomes a draft. Check Retry-After, the maximum attempts and that ambiguous failures stop without reposting. Streamlit retries only the active module. The browser fixture selects 3.8 and clicks the same Generate button as Lite, then verifies retry progress and completion with a simulated provider.
+Inject HTTP 503 while generating the exact one-module Drone 101 outline. Verify the retry repeats the model, full source and high reasoning and the completed response becomes a draft. Check Retry-After, the maximum attempts and that ambiguous failures stop without reposting. Streamlit retries only the active module. The browser fixture selects Antigravity and clicks the same Generate button as Lite, then verifies retry progress and completion with a simulated provider.
+
+## Antigravity Preview
+
+Verify both selectors offer Antigravity and omit the standalone 3.8 preset. Check the agent ID, the pinned Flash-Lite model, the token budget, the supplied syllabus and the disabled interaction storage setting. Verify the adapter takes final model text from completed responses and preserves completed modules and accepted material if a later request fails. Live access depends on the configured Gemini project.

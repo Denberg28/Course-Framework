@@ -5,8 +5,8 @@ from unittest.mock import patch
 from urllib.error import HTTPError, URLError
 
 from course_core import CourseError, SAMPLE
-from engines import EngineConfig, NoRedirect, generate_course, request_json, validate_endpoint
-from test_workflow import response
+from engines import ANTIGRAVITY_AGENT, INTERACTIONS_URL, EngineConfig, NoRedirect, generate_course, request_json, validate_endpoint
+from test_workflow import antigravity_response, response
 
 
 class EngineTests(unittest.TestCase):
@@ -46,6 +46,28 @@ class EngineTests(unittest.TestCase):
                     self.assertNotIn('timeout', send.call_args.kwargs)
                     self.assertEqual(payload['generationConfig'], {'maxOutputTokens': 16384})
         self.assertTrue(all(prompt == prompts[0] for prompt in prompts))
+
+    def test_antigravity_uses_the_managed_agent_api_and_final_text(self):
+        result = antigravity_response('Finished module')
+        result['steps'][:0] = [
+            {'type': 'model_output', 'content': [{'type': 'text', 'text': 'Intermediate plan'}]},
+            {'type': 'thought', 'content': [{'type': 'text', 'text': 'Internal analysis'}]},
+        ]
+        config = EngineConfig('Google AI Studio (Gemini)', 'fake-secret', ANTIGRAVITY_AGENT)
+        with patch('engines.request_json', return_value=result) as send:
+            text = generate_course(SAMPLE, '', config, module_index=0)
+        self.assertEqual(text, 'Finished module\n')
+        url, headers, payload = send.call_args.args
+        self.assertEqual(url, INTERACTIONS_URL)
+        self.assertEqual(headers['x-goog-api-key'], 'fake-secret')
+        self.assertEqual(payload['agent'], ANTIGRAVITY_AGENT)
+        self.assertEqual(payload['agent_config']['model'], 'gemini-3.5-flash-lite')
+        self.assertEqual(payload['agent_config']['max_total_tokens'], 50000)
+        self.assertEqual(payload['tools'], [])
+        self.assertEqual(payload['environment'], 'remote')
+        self.assertFalse(payload['store'])
+        self.assertIn(SAMPLE, payload['input'])
+        self.assertIn('Answer key', payload['system_instruction'])
 
     def test_extended_timeout_is_applied_once_and_errors_are_distinct(self):
         for error in (TimeoutError('fake-secret'), URLError(TimeoutError('fake-secret')),

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.15-rc.1 — Antigravity Preview preset
+
+- Replace the 3.8 Flash preset with Google Antigravity Preview in Streamlit and Windows. Keep 3.5 Flash-Lite as the default and pin it as the agent’s underlying model.
+- Use the managed-agent Interactions API with the existing module prompt, an empty custom tool list and a best-effort per-module token budget. Preserve accepted work and saved 3.8 projects.
+
 ## 0.3.14-rc.1 — One-click module generation for Gemini 3.8 Flash
 
 - Use the same Generate action and Google `generateContent` route as Flash-Lite in Streamlit and Windows. Remove the background-mode checkbox.

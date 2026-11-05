@@ -4,7 +4,6 @@ from unittest.mock import patch
 from streamlit.testing.v1 import AppTest
 from course_core import CourseError
 from test_workflow import response
-from engines import ProviderUnavailable
 
 
 class StreamlitTests(unittest.TestCase):
@@ -91,8 +90,13 @@ class StreamlitTests(unittest.TestCase):
         self.assertIn('## Module 13: Pre-Deployment Seminar and Internship Requirements', self.app.session_state['content'])
         self.assertEqual(self.app.session_state['source'], source)
 
-    def test_default_lite_and_selected_flash_route_to_the_right_model(self):
-        self.assertEqual(self.app.session_state['model_choice'], 'gemini-3.5-flash-lite')
+    def test_flash_lite_is_the_only_gemini_model_after_a_stale_selection(self):
+        model = 'gemini-3.5-flash-lite'
+        self.assertEqual(self.app.selectbox(key='model_choice').options, [model])
+        self.app = AppTest.from_file('app.py', default_timeout=30)
+        self.app.session_state['model_choice'] = 'gemini-3.8-flash'
+        self.app.run()
+        self.assertEqual(self.app.session_state['model_choice'], model)
         source = 'drone 101\n1. drone componenta'
         self.app.text_area(key='source').set_value(source).run()
         self.app.text_input(key='api_key').set_value('fake-key').run()
@@ -101,62 +105,10 @@ class StreamlitTests(unittest.TestCase):
             self.click('Generate')
             send.assert_called_once()
             self.assertIn('/gemini-3.5-flash-lite:generateContent', send.call_args.args[0])
-        self.app.selectbox(key='model_choice').select('gemini-3.8-flash').run()
-        with patch('engines.request_json', return_value=response()) as send:
-            self.click('Generate')
-            send.assert_called_once()
-            self.assertTrue(send.call_args.args[0].endswith('/gemini-3.8-flash:generateContent'))
-            self.assertEqual(send.call_args.kwargs['timeout'], 300)
-            self.assertEqual(send.call_args.args[2]['generationConfig']['thinkingConfig']['thinkingLevel'], 'high')
-        self.assertEqual(self.app.session_state['pending']['model'], 'gemini-3.8-flash')
-        self.assertIn('## Module 1: drone componenta', self.app.session_state['pending']['completed'][0])
+        pending = self.app.session_state['pending']
+        self.assertEqual(pending['model'], model)
+        self.assertIn('## Module 1: drone componenta', pending['completed'][0])
         self.assertEqual(self.app.session_state['generation_status']['text'], 'Draft ready · 1/1 complete')
-        self.app.run()
-        self.assertEqual(self.app.session_state['model_choice'], 'gemini-3.8-flash')
-
-    def test_flash_timeout_or_token_limit_keeps_checkpoint_and_resume(self):
-        self.click('Example')
-        self.app.selectbox(key='model_choice').select('gemini-3.8-flash').run()
-        self.app.text_input(key='api_key').set_value('fake-key').run()
-        self.app.checkbox(key='online_consent').check().run()
-        self.app.session_state['content'] = 'Keep accepted material'
-        self.app.run()
-        cutoff = response('Partial lesson', 'MAX_TOKENS')
-        for failure in (CourseError('The engine did not respond within the 300-second connection/read timeout.'), cutoff):
-            # Each attempt starts fresh after the preceding test job finished.
-            with self.subTest(failure=type(failure)), patch('engines.request_json', side_effect=[response(), failure]) as send:
-                self.click('Generate')
-                self.assertEqual(send.call_count, 2)
-            self.assertEqual(self.app.session_state['generation_status']['completed'], 1)
-            self.assertEqual(self.app.session_state['generation_status']['total'], 5)
-            self.assertEqual(len(self.app.session_state['pending']['completed']), 1)
-            self.assertNotIn('Partial lesson', self.app.session_state['pending']['completed'][0])
-            self.assertEqual(self.app.session_state['content'], 'Keep accepted material')
-            with patch('engines.request_json', return_value=response()) as send:
-                self.click('Resume')
-                self.assertEqual(send.call_count, 4)
-                self.assertTrue(all(c.kwargs['timeout'] == 300 for c in send.call_args_list))
-                self.app.run()
-                self.assertEqual(send.call_count, 4)
-            self.assertEqual(self.app.session_state['generation_status']['completed'], 5)
-            self.assertEqual(self.app.session_state['content'], 'Keep accepted material')
-
-    def test_flash_503_retries_only_the_current_module(self):
-        self.click('Example')
-        self.app.selectbox(key='model_choice').select('gemini-3.8-flash').run()
-        self.app.text_input(key='api_key').set_value('fake-key').run()
-        self.app.checkbox(key='online_consent').check().run()
-        self.app.session_state['content'] = 'Keep accepted material'
-        replies = [response(), ProviderUnavailable('HTTP 503'), *[response()] * 4]
-        with patch('engines.time.sleep'), patch('engines.request_json', side_effect=replies) as send:
-            self.click('Generate')
-            self.assertEqual(send.call_count, 6)
-            prompts = [c.args[2]['contents'][0]['parts'][0]['text'] for c in send.call_args_list]
-            self.assertIn('ONLY module 1:', prompts[0])
-            self.assertIn('ONLY module 2:', prompts[1])
-            self.assertEqual(prompts[1], prompts[2])
-        self.assertEqual(len(self.app.session_state['pending']['completed']), 5)
-        self.assertEqual(self.app.session_state['content'], 'Keep accepted material')
 
     def test_direct_generate_use_edit_and_download_survive_rerun(self):
         self.assertEqual(len(self.app.tabs), 0)
@@ -208,14 +160,13 @@ class StreamlitTests(unittest.TestCase):
             if expander.label in {'Assessment', 'Answer key'}:
                 self.assertFalse(expander.proto.expanded)
 
-    def test_model_selector_custom_and_provider_change_clear_credentials(self):
-        self.app.selectbox(key='model_choice').select('gemini-3.5-flash-lite').run()
+    def test_provider_change_clears_credentials_and_keeps_compatible_model_input(self):
         self.assertEqual(self.app.session_state['model_choice'], 'gemini-3.5-flash-lite')
-        self.app.selectbox(key='model_choice').select('Custom model…').run()
-        self.app.text_input(key='custom_model').set_value('my-model').run()
         self.app.text_input(key='api_key').set_value('fake-key').run()
         self.app.checkbox(key='online_consent').check().run()
         self.app.selectbox(key='provider').select('OpenAI-compatible').run()
+        self.app.text_input(key='custom_model').set_value('my-model').run()
+        self.assertEqual(self.app.session_state['custom_model'], 'my-model')
         self.assertEqual(self.app.session_state['api_key'], '')
         self.assertFalse(self.app.session_state['online_consent'])
         self.assertFalse(self.app.exception)

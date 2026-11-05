@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.15-rc.1 — Flash-Lite only for Gemini
+
+- Use Gemini 3.5 Flash-Lite for all Gemini generation in Streamlit and Windows. Preserve accepted courses, saved drafts, offline templates, and custom compatible-provider settings.
+
 ## 0.3.14-rc.1 — One-click module generation for Gemini 3.8 Flash
 
 - Use the same Generate action and Google `generateContent` route as Flash-Lite in Streamlit and Windows. Remove the background-mode checkbox.

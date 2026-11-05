@@ -66,6 +66,7 @@ def config():
     model = state.custom_model.strip() if state.model_choice == CUSTOM_MODEL else state.model_choice
     key = state.get('api_key', '')
     if state.provider == PROVIDERS[1]:
+        model = GEMINI_MODELS[0]
         key = gemini_secret(st.secrets) or key
     return EngineConfig(state.provider, key, model, state.get('endpoint', 'https://api.openai.com/v1'))
 
@@ -124,10 +125,15 @@ def open_project():
                 if state.provider != job['provider']:
                     state.api_key, state.online_consent = '', False
                 state.provider = job['provider']
-                state.model_choice = (job['model'] if job['model'] in GEMINI_MODELS else
+                state.model_choice = (GEMINI_MODELS[0] if state.provider == PROVIDERS[1] else
                                       'Offline template' if state.provider == PROVIDERS[0] else CUSTOM_MODEL)
                 state.custom_model = job['model']
-        notify('Project opened. Set the original agent/endpoint and session key to resume.')
+        job = saved['pending']
+        if (job and not is_complete(job) and job['provider'] == PROVIDERS[1]
+                and job['model'].removeprefix('models/') != GEMINI_MODELS[0]):
+            notify('Project opened. Your previous draft is available. Generate starts a new Flash-Lite draft.')
+        else:
+            notify('Project opened. Set the original agent/endpoint and session key to resume.')
     except CourseError as error:
         notify(str(error), True)
 
@@ -227,13 +233,13 @@ with st.container(key='syllabus_input'):
     if state.get('module_scope', -1) not in scope_options:
         state.module_scope = -1
     agent, key = st.columns(2)
-    options = ([*GEMINI_MODELS, CUSTOM_MODEL] if state.provider == PROVIDERS[1] else
+    options = (GEMINI_MODELS if state.provider == PROVIDERS[1] else
                ['Offline template'] if state.provider == PROVIDERS[0] else [CUSTOM_MODEL])
     if state.model_choice not in options:
         state.model_choice = options[0]
     agent.selectbox('Agent model', options, key='model_choice',
-                    on_change=clear_generation_status,
-                    help='3.5 Flash-Lite is the default. Choose 3.8 Flash for demanding work. Availability and quotas depend on your provider account.')
+                    on_change=clear_generation_status, disabled=len(options) == 1,
+                    help='Gemini generation uses 3.5 Flash-Lite. Choose a different provider in Settings & files.')
     hosted_key = ''
     if state.provider == PROVIDERS[1]:
         try:

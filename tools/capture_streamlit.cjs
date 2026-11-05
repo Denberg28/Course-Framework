@@ -49,8 +49,6 @@ async function main() {
         .some(e => e.textContent.includes(label) && e.textContent.includes(value)), { label, value });
     }
     assert.ok((await select('Agent model').innerText()).includes('gemini-3.5-flash-lite'));
-    await choose('Agent model', 'gemini-3.8-flash');
-    await choose('Agent model', 'gemini-3.5-flash-lite');
     assert.equal(await page.getByRole('button', { name: 'Generate', exact: true }).isEnabled(), true);
     await page.getByText('Send syllabus to this agent (fees/quota may apply)', { exact: true }).click();
     await page.waitForFunction(() => document.querySelector('input[aria-label="Send syllabus to this agent (fees/quota may apply)"]')?.checked);
@@ -109,13 +107,13 @@ async function main() {
     await page.getByText('Send syllabus to this agent (fees/quota may apply)', { exact: true }).click();
     await page.waitForFunction(() => document.querySelector('input[aria-label="Send syllabus to this agent (fees/quota may apply)"]')?.checked);
     assert.equal(await page.getByRole('checkbox', { name: 'Send syllabus to this agent (fees/quota may apply)', exact: true }).isChecked(), true);
-    async function captureGeneration(name, expectRetry = false) {
+    async function captureGeneration(name) {
       await page.getByRole('button', { name: 'Generate', exact: true }).click();
       const busy = page.getByRole('button', { name: 'Generating…', exact: true });
       await busy.waitFor();
       assert.equal(await busy.isEnabled(), false);
       const status = page.locator('.st-key-generation_status');
-      await status.getByText(expectRetry ? /Google is busy. Retrying module/ : /Generating module/).waitFor();
+      await status.getByText(/Generating module/).waitFor();
       const position = await status.evaluate(el => {
         const b = document.querySelector('.st-key-generation_controls button');
         const m = document.querySelector('[data-testid="stMain"]');
@@ -129,9 +127,7 @@ async function main() {
       await status.getByText('Draft ready · 5/5 complete', { exact: true }).waitFor();
       await page.getByRole('button', { name: 'Generate', exact: true }).waitFor();
     }
-    await choose('Agent model', 'gemini-3.8-flash');
-    await captureGeneration('streamlit-generation-desktop.png', true);
-    await choose('Agent model', 'gemini-3.5-flash-lite');
+    await captureGeneration('streamlit-generation-desktop.png');
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole('link', { name: 'Syllabus', exact: true }).click();
     await settleScroll();

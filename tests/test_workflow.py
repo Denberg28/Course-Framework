@@ -59,13 +59,8 @@ D. A missing load
 """
 
 
-def response(text=MODULE):
-    return {'candidates': [{'finishReason': 'STOP', 'content': {'parts': [{'text': text}]}}]}
-
-
-def background_response(text=MODULE, status='completed'):
-    return {'status': status,
-            'steps': [{'type': 'model_output', 'content': [{'type': 'text', 'text': text}]}]}
+def response(text=MODULE, finish_reason='STOP'):
+    return {'candidates': [{'finishReason': finish_reason, 'content': {'parts': [{'text': text}]}}]}
 
 
 class WorkflowTests(unittest.TestCase):
@@ -80,12 +75,12 @@ class WorkflowTests(unittest.TestCase):
         prompts = []
         def send(url, headers, payload):
             prompts.append(payload)
-            return background_response('### Discussion\nA draft explanation of drone parts and a guided identification task.')
+            return response('### Discussion\nA draft explanation of drone parts and a guided identification task.')
         while not is_complete(job):
             job = advance(job, self.config, transport=send)
         self.assertEqual(len(prompts), 2)
         self.assertIn('Missing course metadata, outcomes, hours or references must not prevent drafting',
-                      prompts[0]['system_instruction'])
+                      prompts[0]['systemInstruction']['parts'][0]['text'])
         text = draft_text(job)
         self.assertIn('## Module 1: drone component', text)
         self.assertIn('## Module 2: drone schematic', text)
@@ -99,8 +94,8 @@ class WorkflowTests(unittest.TestCase):
         source = Path('examples/AE417-syllabus.md').read_text(encoding='utf-8')
         prompts = []
         def transport(url, headers, payload):
-            prompts.append(payload['input'])
-            return background_response()
+            prompts.append(payload['contents'][0]['parts'][0]['text'])
+            return response()
         job = new_job(source, '', self.config)
         self.assertEqual(job['indices'], list(range(13)))
         while not is_complete(job):
@@ -124,8 +119,8 @@ class WorkflowTests(unittest.TestCase):
         source = Path('examples/AE416-syllabus.txt').read_text(encoding='utf-8')
         prompts = []
         def transport(url, headers, payload):
-            prompts.append(payload['input'])
-            return background_response()
+            prompts.append(payload['contents'][0]['parts'][0]['text'])
+            return response()
         job = new_job(source, '', self.config)
         while not is_complete(job):
             job = advance(job, self.config, transport=transport)
@@ -152,10 +147,10 @@ class WorkflowTests(unittest.TestCase):
     def test_partial_job_roundtrip_resumes_only_failed_module(self):
         calls = []
         def transport(url, headers, payload):
-            calls.append(payload['input'])
+            calls.append(payload['contents'][0]['parts'][0]['text'])
             if len(calls) == 2:
                 raise CourseError('Quota reached')
-            return background_response()
+            return response()
         job = new_job(SAMPLE, '', self.config, [0, 1])
         job = advance(job, self.config, transport=transport)
         with self.assertRaises(CourseError):
@@ -203,7 +198,7 @@ class WorkflowTests(unittest.TestCase):
     def test_video_suggestions_removed_and_syllabus_references_appended(self):
         syllabus = SAMPLE + '\nhttps://youtu.be/realSourceID\n'
         bad = MODULE + '\n### Video resources\n[Suggestion](https://youtu.be/inventedID)\n'
-        job = advance(new_job(syllabus, '', self.config, [0]), self.config, transport=lambda *args: background_response(bad))
+        job = advance(new_job(syllabus, '', self.config, [0]), self.config, transport=lambda *args: response(bad))
         text = draft_text(job)
         self.assertNotIn('youtu.be', text)
         self.assertNotIn('Video resources', text)
@@ -213,7 +208,7 @@ class WorkflowTests(unittest.TestCase):
 
     def test_format_differences_are_review_notes_but_truncation_still_stops(self):
         job = new_job(SAMPLE, '', self.config)
-        kept = advance(job, self.config, transport=lambda *args: background_response('# Brief draft'))
+        kept = advance(job, self.config, transport=lambda *args: response('# Brief draft'))
         self.assertEqual(len(kept['completed']), 1)
         self.assertIn('Brief draft', kept['completed'][0])
         self.assertIn('### Review notes', kept['completed'][0])

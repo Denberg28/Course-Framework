@@ -5,8 +5,8 @@ from unittest.mock import patch
 from urllib.error import HTTPError, URLError
 
 from course_core import CourseError, SAMPLE
-from engines import INTERACTIONS_URL, EngineConfig, NoRedirect, generate_course, request_json, validate_endpoint
-from test_workflow import background_response
+from engines import EngineConfig, NoRedirect, generate_course, request_json, validate_endpoint
+from test_workflow import response
 
 
 class EngineTests(unittest.TestCase):
@@ -27,25 +27,25 @@ class EngineTests(unittest.TestCase):
         self.assertIn('Lesson content', generate_course(SAMPLE, 'Course', config, transport=send))
 
     def test_flash_reasoning_settings_reach_the_request_wrapper(self):
-        answer = {'candidates': [{'finishReason': 'STOP', 'content': {'parts': [{'text': 'Final lesson'}]}}]}
+        prompts = []
         for model in ('gemini-3.8-flash', 'models/gemini-3.8-flash', 'gemini-3.5-flash-lite', 'custom-model'):
-            is_flash = model.removeprefix('models/') == 'gemini-3.8-flash'
-            with self.subTest(model=model), patch('engines.request_json', return_value=background_response() if is_flash else answer) as send:
-                generate_course(SAMPLE, '', EngineConfig('Google AI Studio (Gemini)', 'fake-secret', model, flash_background=is_flash))
+            model_id = model.removeprefix('models/')
+            is_flash = model_id == 'gemini-3.8-flash'
+            with self.subTest(model=model), patch('engines.request_json', return_value=response()) as send:
+                generate_course(SAMPLE, '', EngineConfig('Google AI Studio (Gemini)', 'fake-secret', model), module_index=0)
                 url, headers, payload = send.call_args.args
-                self.assertNotIn('fake-secret', url)
+                self.assertTrue(url.endswith(f'/{model_id}:generateContent'))
+                self.assertEqual(headers, {'x-goog-api-key': 'fake-secret'})
+                prompts.append((payload['systemInstruction'], payload['contents']))
                 if is_flash:
-                    self.assertEqual(url, INTERACTIONS_URL)
-                    self.assertEqual(headers['Api-Revision'], '2026-05-20')
-                    self.assertEqual(send.call_args.kwargs['timeout'], 45)
-                    self.assertEqual(payload['generation_config'], {'max_output_tokens': 32768, 'thinking_level': 'medium'})
-                    self.assertEqual(payload['model'], 'gemini-3.8-flash')
-                    self.assertTrue(payload['background'])
-                    self.assertTrue(payload['store'])
-                    self.assertIn(SAMPLE, payload['input'])
+                    self.assertEqual(send.call_args.kwargs['timeout'], 300)
+                    self.assertEqual(payload['generationConfig'], {
+                        'maxOutputTokens': 32768, 'thinkingConfig': {'thinkingLevel': 'high'},
+                    })
                 else:
-                    self.assertIn(':generateContent', url)
+                    self.assertNotIn('timeout', send.call_args.kwargs)
                     self.assertEqual(payload['generationConfig'], {'maxOutputTokens': 16384})
+        self.assertTrue(all(prompt == prompts[0] for prompt in prompts))
 
     def test_extended_timeout_is_applied_once_and_errors_are_distinct(self):
         for error in (TimeoutError('fake-secret'), URLError(TimeoutError('fake-secret')),

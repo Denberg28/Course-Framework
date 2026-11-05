@@ -1,6 +1,6 @@
 # Verification and release gates
 
-Target: **0.3.9-rc.1**, baseline `288e56c`. Evidence is automated and self-reviewed, with simulated provider responses. Live API and manual Windows/high-DPI/accessibility acceptance remain pending.
+Target: **0.3.14-rc.1**, baseline `9c2ba0e`. Evidence is automated and self-reviewed, with simulated provider responses. Live API and manual Windows/high-DPI/accessibility acceptance remain pending.
 
 | Gate | Check |
 |---|---|
@@ -71,7 +71,7 @@ Local Python 3.12: 69 tests discovered, 59 passed and 10 native-display tests sk
 
 ## Gemini 3.8 request and failure regression
 
-Verify the 3.8 preset and models/ alias use the Google Interactions endpoint with medium reasoning and max_output_tokens 32768 in both direct and background modes. Only background mode enables retrieval storage. Verify that recognized terminal failure codes produce fixed messages. Lite/custom settings remain on generateContent. Mock the HTTP opener to assert timeout forwarding and sanitized transport errors. The Streamlit regression preserves completed modules and accepted material after a submission failure or incomplete result and resumes only the remaining modules.
+Verify both Gemini presets use `generateContent` and send identical teaching prompts. Verify the 3.8 preset and `models/` alias send high reasoning, a 32,768-token allowance and a 300-second connection/read timeout. Lite and custom settings keep the 16,384-token allowance and default timeout. The Streamlit regression preserves completed modules and accepted material after a timeout or token limit and resumes only the remaining modules.
 
 ## Direct paste-to-Generate regression
 
@@ -87,10 +87,6 @@ Workflow/Streamlit tests generate two completed modules from nonstandard brief r
 
 Local Python 3.12: 80 tests discovered, 69 passed and 11 native-display skips. Final Linux/Windows/native/browser/package checks gate candidate publication. Provider responses are simulated; teaching accuracy and live account performance remain unverified.
 
-## Gemini 3.8 background regression
-
-A local HTTP server accepts the exact two-line drone syllabus, acknowledges one POST, and returns queued, running and completed results through GET status checks. Verify the output excludes echoed input and thought content. Simulate a dropped status read, confirm the same interaction is read again, and assert the POST count stays at one. Verify deletion is attempted after retrieval and a cleanup failure preserves the draft. Verify known Google HTTP 400 rejections are sanitized. Check malformed IDs, unexpected and incomplete results, bounds, and credential reflection. Chromium verifies the provider status above the disabled action and then verifies completion. CI uses no Google credentials or real Google calls.
-
 ## Gemini 3.8 overload recovery
 
-Inject an HTTP 503 and check that the request repeats the same model, full source and medium reasoning. Check Retry-After and the maximum attempts. Verify that ambiguous submissions stop, background status reads reuse the interaction ID, and Streamlit retries only the active module while preserving accepted material. The browser fixture verifies visible retry progress.
+Inject HTTP 503 while generating the exact one-module Drone 101 outline. Verify the retry repeats the model, full source and high reasoning and the completed response becomes a draft. Check Retry-After, the maximum attempts and that ambiguous failures stop without reposting. Streamlit retries only the active module. The browser fixture selects 3.8 and clicks the same Generate button as Lite, then verifies retry progress and completion with a simulated provider.

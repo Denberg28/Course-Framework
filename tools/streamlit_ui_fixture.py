@@ -12,38 +12,30 @@ sys.path[:0] = [str(ROOT), str(ROOT / 'tests')]
 
 import engines
 import hosted_keys
-from test_workflow import background_response, response
+from test_workflow import response
 
 
-background_rejected = False
+flash_rejected = False
 
 
-def simulated_request(url, headers, payload, *, timeout=60, method=None):
-    global background_rejected
+def simulated_request(url, headers, payload, *, timeout=60):
+    global flash_rejected
     # No credential, URL or prompt is logged or sent anywhere.
     if not url.startswith('https://generativelanguage.googleapis.com/'):
         raise engines.CourseError('The UI fixture supports simulated Gemini requests only.')
-    if url == engines.INTERACTIONS_URL:
-        background = payload.get('background')
-        if timeout != (45 if background else 180) or payload.get('generation_config') != {
-                'max_output_tokens': 32768, 'thinking_level': 'medium'} or payload.get('store') is not background:
-            raise engines.CourseError('The 3.8 Flash request did not use its background reasoning settings.')
-        if background and not background_rejected:
-            background_rejected = True
+    if url.endswith('/gemini-3.8-flash:generateContent'):
+        if timeout != 300 or payload.get('generationConfig') != {
+                'maxOutputTokens': 32768, 'thinkingConfig': {'thinkingLevel': 'high'}}:
+            raise engines.CourseError('The 3.8 Flash request did not use high reasoning.')
+        if not flash_rejected:
+            flash_rejected = True
             raise engines.ProviderUnavailable('Simulated HTTP 503')
-        return {'id': 'int_test', 'status': 'in_progress'} if background else background_response()
-    if url == f'{engines.INTERACTIONS_URL}/int_test' and payload is None:
-        if method == 'DELETE':
-            return {}
-        time.sleep(.9)
-        return background_response()
     time.sleep(1.2)
     if 'drone 101' in payload['contents'][0]['parts'][0]['text']:
         return response('### Discussion\nIdentify drone components using a supplied diagram.\n\n### Activity\nLabel the diagram and explain each connection.')
     return response()
 
 
-engines.FLASH_POLL_INTERVAL = .35
 engines.FLASH_RETRY_DELAYS = (.9, 1.5)
 engines.request_json = simulated_request
 hosted_keys.gemini_secret = lambda secrets: 'fake-ui-deployment-key'

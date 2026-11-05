@@ -5,7 +5,7 @@ import streamlit as st
 from academy_theme import streamlit_css, streamlit_header
 from course_core import (CourseError, VERSION, analyze_syllabus, course_allocation, export_bundle,
                          extract_text, load_project, make_project, project_bytes)
-from engines import BACKGROUND_DISCLOSURE, EngineConfig, PROVIDERS
+from engines import EngineConfig, PROVIDERS
 from hosted_keys import gemini_secret
 from lesson_format import presentation_parts
 from course_workflow import (CUSTOM_MODEL, GEMINI_MODELS, accept_job, advance, can_resume,
@@ -17,7 +17,7 @@ DEFAULTS = {'source': '', 'course_title': '', 'content': '', 'engine_used': 'Loc
             'model_used': '', 'accepted_source': '', 'pending': None, 'provider': PROVIDERS[1],
             'api_key': '', 'model_choice': GEMINI_MODELS[0], 'custom_model': '',
             'endpoint': 'https://api.openai.com/v1', 'notice': '', 'notice_error': False,
-            'online_consent': False, 'replace_course': False, 'flash_background': False,
+            'online_consent': False, 'replace_course': False,
             'generation_requested': False, 'generation_status': None}
 for key, value in DEFAULTS.items():
     if key not in st.session_state:
@@ -67,8 +67,7 @@ def config():
     key = state.get('api_key', '')
     if state.provider == PROVIDERS[1]:
         key = gemini_secret(st.secrets) or key
-    return EngineConfig(state.provider, key, model, state.get('endpoint', 'https://api.openai.com/v1'),
-                        flash_background=state.get('flash_background', False))
+    return EngineConfig(state.provider, key, model, state.get('endpoint', 'https://api.openai.com/v1'))
 
 
 def project():
@@ -152,11 +151,8 @@ def generate():
             number = job['indices'][len(job['completed'])] + 1
             status['text'] = f"Generating module {number} · {status['completed']}/{status['total']} complete"
             bar.progress(status['completed'] / status['total'], text=status['text'])
-            def provider_status(phase):
-                label = {'queued': 'Google queued', 'in_progress': 'Google is generating',
-                         'reconnecting': 'Reconnecting to Google for',
-                         'retrying': 'Google is busy. Retrying'}[phase]
-                status['text'] = f"{label} module {number} · {status['completed']}/{status['total']} complete"
+            def provider_status(_phase):
+                status['text'] = f"Google is busy. Retrying module {number} · {status['completed']}/{status['total']} complete"
                 bar.progress(status['completed'] / status['total'], text=status['text'])
             job = advance(job, cfg, on_progress=provider_status)
             state.pending = job  # Commit each successful module before requesting the next.
@@ -250,12 +246,6 @@ with st.container(key='syllabus_input'):
         key.text_input('API key', type='password', key='api_key')
     if state.model_choice == CUSTOM_MODEL:
         st.text_input('Model ID', key='custom_model', placeholder='Provider model ID', on_change=clear_generation_status)
-    model = state.custom_model if state.model_choice == CUSTOM_MODEL else state.model_choice
-    if EngineConfig(state.provider, model=model).is_gemini_flash:
-        st.checkbox('Run 3.8 Flash in the background', key='flash_background',
-                    on_change=clear_generation_status, help='Both modes use medium reasoning and retry an explicit Google 503 up to twice.')
-        if state.flash_background:
-            st.caption(BACKGROUND_DISCLOSURE)
     if state.provider != PROVIDERS[0]:
         st.checkbox('Send syllabus to this agent (fees/quota may apply)', key='online_consent')
     try:

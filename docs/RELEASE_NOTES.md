@@ -1,5 +1,5 @@
-# Course Framework 0.3.14-rc.1 — One-click Gemini 3.8 Flash generation
+# Course Framework 0.3.15-rc.1 — Flash-Lite only for Gemini
 
-Select Gemini 3.8 Flash and click Generate in Streamlit or Windows. The app uses the same Google `generateContent` route as Flash-Lite, with high reasoning, the full teaching prompt, and a 300-second connection/read timeout. It retries an explicit Google HTTP 503 up to twice and keeps completed modules for Resume.
+Streamlit and Windows now use Gemini 3.5 Flash-Lite for all Gemini module generation. Existing courses and drafts keep their original content and model information. Starting generation on an unfinished project from another Gemini model creates a fresh Flash-Lite draft. Offline templates and the separate OpenAI-compatible provider remain available.
 
-Live provider availability and teaching quality remain unverified. This is an unsigned Windows prerelease. Extract the whole ZIP before running CourseFramework.exe.
+This is an unsigned Windows prerelease. Extract the whole ZIP before running CourseFramework.exe.

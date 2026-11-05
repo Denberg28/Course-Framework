@@ -1,5 +1,7 @@
 # Gemini 3.8 Flash generation
 
+The application uses 3.5 Flash-Lite for Gemini generation starting with 0.3.15. The 3.8 material below describes earlier versions and legacy adapter behavior.
+
 From 0.3.14-rc.1, select **3.8 Flash**, allow syllabus transmission, and click **Generate**. Both Gemini presets use Google's `generateContent` endpoint. 3.8 Flash uses high reasoning, the full teaching prompt, a 32,768-token allowance, and a 300-second connection/read timeout. Check the version in **Settings & files**.
 
 The exact input `drone 101` followed by `1. drone componenta` produces one module. The earlier live run on the Interactions route returned Google HTTP 503. The current generation path has been tested with simulated provider responses.

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.14-rc.1 — One-click module generation for Gemini 3.8 Flash
+
+- Use the same Generate action and Google `generateContent` route as Flash-Lite in Streamlit and Windows. Remove the background-mode checkbox.
+- Request high reasoning and allow a 300-second connection/read timeout for 3.8 Flash. Keep the full module prompt, 32,768-token allowance, bounded HTTP 503 retries, and completed-module resume.
+
 ## 0.3.13-rc.1 — Recover from transient Gemini 3.8 Flash overload
 
 - Retry the current module up to twice after an explicit Google HTTP 503 in either 3.8 mode. Back off between attempts and honor short provider retry delays.

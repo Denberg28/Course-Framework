@@ -109,14 +109,13 @@ async function main() {
     await page.getByText('Send syllabus to this agent (fees/quota may apply)', { exact: true }).click();
     await page.waitForFunction(() => document.querySelector('input[aria-label="Send syllabus to this agent (fees/quota may apply)"]')?.checked);
     assert.equal(await page.getByRole('checkbox', { name: 'Send syllabus to this agent (fees/quota may apply)', exact: true }).isChecked(), true);
-    async function captureGeneration(name, background = false) {
+    async function captureGeneration(name, expectRetry = false) {
       await page.getByRole('button', { name: 'Generate', exact: true }).click();
       const busy = page.getByRole('button', { name: 'Generating…', exact: true });
       await busy.waitFor();
       assert.equal(await busy.isEnabled(), false);
       const status = page.locator('.st-key-generation_status');
-      if (background) await status.getByText(/Google is busy. Retrying module/).waitFor();
-      await status.getByText(background ? /Google is generating module/ : /Generating module/).waitFor();
+      await status.getByText(expectRetry ? /Google is busy. Retrying module/ : /Generating module/).waitFor();
       const position = await status.evaluate(el => {
         const b = document.querySelector('.st-key-generation_controls button');
         const m = document.querySelector('[data-testid="stMain"]');
@@ -131,8 +130,6 @@ async function main() {
       await page.getByRole('button', { name: 'Generate', exact: true }).waitFor();
     }
     await choose('Agent model', 'gemini-3.8-flash');
-    await page.getByText('Run 3.8 Flash in the background', { exact: true }).click();
-    await page.getByText(/Google stores the request and result for retrieval/).waitFor();
     await captureGeneration('streamlit-generation-desktop.png', true);
     await choose('Agent model', 'gemini-3.5-flash-lite');
     await page.setViewportSize({ width: 390, height: 844 });

@@ -15,7 +15,7 @@ from academy_theme import FIELD, INK, LINE, PAPER, WARM, apply_desktop_theme
 from course_core import (CourseError, SAMPLE, VERSION, analyze_syllabus, atomic_write,
                          export_bundle, export_html, extract_text, load_project,
                          make_project, project_bytes, read_file, topic_allocation)
-from engines import BACKGROUND_DISCLOSURE, EngineConfig, PROVIDERS
+from engines import EngineConfig, PROVIDERS
 from course_workflow import GEMINI_MODELS, accept_job, advance, can_resume, draft_text, is_complete, new_job
 
 
@@ -41,7 +41,6 @@ class CourseMaker:
         self.key = tk.StringVar()
         self.endpoint = tk.StringVar(value='https://api.openai.com/v1')
         self.consent = tk.BooleanVar(value=False)
-        self.flash_background = tk.BooleanVar(value=False)
         self.scope = tk.StringVar(value='All modules')
         self.view = tk.StringVar(value='Course')
         self.summary = tk.StringVar(value='Enter a topic or syllabus to begin.')
@@ -94,22 +93,6 @@ class CourseMaker:
         self.scope_picker.pack(fill='x', pady=(6, 4))
         consent_box = ttk.Checkbutton(self.input_panel, text='Send syllabus to agent · fees/quota may apply', variable=self.consent)
         consent_box.pack(anchor='w', pady=(0, 5))
-        background_box = ttk.Checkbutton(self.input_panel, text='Run 3.8 Flash in the background',
-                                         variable=self.flash_background)
-        disclosure = ttk.Label(self.input_panel, text=BACKGROUND_DISCLOSURE, style='Muted.TLabel', wraplength=300)
-        def show_disclosure(*_):
-            cfg = self.config()
-            if cfg.is_gemini_flash:
-                background_box.pack(before=consent_box, anchor='w', pady=(0, 3))
-            else:
-                background_box.pack_forget()
-            if cfg.is_gemini_flash and cfg.flash_background:
-                disclosure.pack(before=consent_box, anchor='w', pady=(0, 5))
-            else:
-                disclosure.pack_forget()
-        self.flash_background.trace_add('write', show_disclosure)
-        self.model.trace_add('write', show_disclosure)
-        self.provider.trace_add('write', show_disclosure)
         actions = ttk.Frame(self.input_panel)
         actions.pack(fill='x')
         self.generate_button = ttk.Button(actions, text='Generate', style='Accent.TButton', command=self.start)
@@ -251,7 +234,7 @@ class CourseMaker:
 
     def config(self):
         return EngineConfig(self.provider.get(), self.key.get(), self.model.get().strip(), self.endpoint.get().strip(),
-                            allow_local=True, flash_background=self.flash_background.get())
+                            allow_local=True)
 
     def indices(self):
         if self.scope.get() == 'All modules':

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from email.utils import parsedate_to_datetime
+from functools import partial
 from math import ceil
 import ipaddress
 import json
@@ -47,7 +48,6 @@ class EngineConfig:
     model: str = DEFAULT_GEMINI_MODEL
     base_url: str = "https://api.openai.com/v1"
     allow_local: bool = False
-    flash_background: bool = False
 
     @property
     def is_gemini_flash(self):
@@ -83,7 +83,7 @@ def validate_endpoint(base_url: str, allow_local: bool) -> str:
 
 
 class TransientEngineError(CourseError):
-    """A transport failure that can be retried for read-only status checks."""
+    """A temporary transport or provider failure."""
 
 
 class ProviderUnavailable(TransientEngineError):
@@ -104,14 +104,11 @@ def _retry_after(headers):
         return 0
 
 
-def request_json(url: str, headers: dict, payload: dict | None, *, timeout: int = 60, method=None) -> dict:
-    request = Request(url, data=None if payload is None else json.dumps(payload).encode("utf-8"),
-                      headers={"Content-Type": "application/json", **headers},
-                      method=method or ("GET" if payload is None else "POST"))
+def request_json(url: str, headers: dict, payload: dict, *, timeout: int = 60) -> dict:
+    request = Request(url, data=json.dumps(payload).encode("utf-8"),
+                      headers={"Content-Type": "application/json", **headers}, method="POST")
     try:
         with build_opener(NoRedirect()).open(request, timeout=timeout) as response:
-            if method == "DELETE":
-                return {}
             raw = response.read(2 * 1024 * 1024 + 1)
             if len(raw) > 2 * 1024 * 1024:
                 raise CourseError("The engine response exceeded the 2 MB limit. Generate a smaller course section.")
@@ -131,15 +128,12 @@ def request_json(url: str, headers: dict, payload: dict | None, *, timeout: int 
         }
         # Do not surface bodies, URLs, exceptions, or headers that may echo a key.
         status = error.code
-        try:
-            detail = (_interaction_rejection(error) if status == 400 and
-                      (url == INTERACTIONS_URL or url.startswith(INTERACTIONS_URL + "/")) else None)
-        finally:
-            error.close()
+        retry_after = _retry_after(error.headers) if status == 503 else 0
+        error.close()
         if status == 503:
-            raise ProviderUnavailable(messages[503], _retry_after(error.headers)) from None
+            raise ProviderUnavailable(messages[503], retry_after) from None
         error_type = TransientEngineError if status in (408, 500, 502, 504) else CourseError
-        raise error_type(detail or messages.get(status, f"The engine returned HTTP {status}. Try again later.")) from None
+        raise error_type(messages.get(status, f"The engine returned HTTP {status}. Try again later.")) from None
     except TimeoutError:
         raise TransientEngineError(f"The engine did not respond within the {timeout}-second connection/read timeout. Completed modules are kept.") from None
     except URLError as error:
@@ -152,150 +146,25 @@ def request_json(url: str, headers: dict, payload: dict | None, *, timeout: int 
         raise CourseError("The API returned invalid JSON. Check that the endpoint supports this provider format.") from None
 
 
-INTERACTIONS_URL = "https://generativelanguage.googleapis.com/v1beta/interactions"
 FLASH_OUTPUT_LIMIT = 32768
-FLASH_POLL_INTERVAL = 5
+FLASH_TIMEOUT = 300
 FLASH_RETRY_DELAYS = (10, 30)
 FLASH_MAX_RETRY_WAIT = 60
-FLASH_MAX_POLL_BACKOFF = 30
-BACKGROUND_DISCLOSURE = ("3.8 Flash runs on Google in the background. Google stores the request and result for retrieval. "
-                         "The app requests deletion after retrieval. Your Google account’s retention settings can apply if cleanup fails.")
 
 
-def _interaction_rejection(error):
-    """Translate a few known Google rejections without exposing the response body."""
-    try:
-        message = json.loads(error.read(16384))["error"]["message"].lower()
-    except (ValueError, OSError, KeyError, TypeError, AttributeError, RecursionError):
-        return None
-    if "background" in message and "store" in message:
-        return "Google rejected the storage settings for background generation (HTTP 400)."
-    if "background" in message and "support" in message:
-        return "Google reported that this model cannot run in the background for this request (HTTP 400)."
-    if "multiple authentication credentials" in message:
-        return "Google rejected authentication for the background interaction (HTTP 400)."
-    if "api key" in message and ("not valid" in message or "invalid" in message):
-        return "Google rejected the API key for the background interaction (HTTP 400)."
-    return None
-
-
-def _interaction_failure_reason(result):
-    reasons = {
-        "invalid_argument": "Google rejected a request parameter during generation.",
-        "invalid_request": "Google rejected a request parameter during generation.",
-        "failed_precondition": "Check the Gemini project's API access and account prerequisites.",
-        "permission_denied": "Google denied access to the selected model or route.",
-        "resource_exhausted": "Google reported a quota or capacity limit.",
-        "rate_limit_exceeded": "Google reported a rate limit.",
-        "service_unavailable": "Google reported that the model is temporarily unavailable.",
-        "unavailable": "Google reported that the model is temporarily unavailable.",
-        "internal": "Google reported an internal model error.",
-        "api_error": "Google reported an internal API error.",
-        "deadline_exceeded": "Google reported a generation timeout.",
-        "gateway_timeout": "Google reported a generation timeout.",
-        "content_blocked": "Google blocked the output under its content policy.",
-    }
-    faults = result.get("errors")
-    for fault in faults if isinstance(faults, list) else [result.get("error")]:
-        code = fault.get("code") if isinstance(fault, dict) else None
-        if isinstance(code, str):
-            reason = reasons.get(code.rsplit("/", 1)[-1].lower())
-            if reason:
-                return reason
-    return "Google supplied no recognized failure reason."
-
-
-def _submit_flash(send, headers, payload, on_progress):
+def _submit_flash(send, url, headers, payload, on_progress):
     # Only an explicit overload response permits another POST.
-    timeout = 45 if payload["background"] else 180
-    for attempt in range(len(FLASH_RETRY_DELAYS) + 1):
+    for delay in FLASH_RETRY_DELAYS:
         try:
-            return send(INTERACTIONS_URL, headers, payload, timeout=timeout)
+            return send(url, headers, payload)
         except ProviderUnavailable as error:
-            if attempt == len(FLASH_RETRY_DELAYS):
-                raise
-            delay = max(FLASH_RETRY_DELAYS[attempt], error.retry_after)
+            delay = max(delay, error.retry_after)
             if delay > FLASH_MAX_RETRY_WAIT:
                 raise
             if on_progress:
                 on_progress("retrying")
             time.sleep(delay)
-
-
-def _flash_interaction(system, prompt, key, send, on_progress, *, background, cleanup):
-    headers = {"x-goog-api-key": key, "Api-Revision": "2026-05-20"}
-    payload = {
-        "model": GEMINI_FLASH_MODEL,
-        "system_instruction": system,
-        "input": prompt,
-        "background": background,
-        "store": background,
-        "generation_config": {"thinking_level": "medium", "max_output_tokens": FLASH_OUTPUT_LIMIT},
-    }
-    try:
-        result = _submit_flash(send, headers, payload, on_progress)
-    except ProviderUnavailable as error:
-        raise CourseError(f"{error} Try Generate or Resume later.") from None
-    except CourseError as error:
-        mode = "background" if background else "direct"
-        raise CourseError(f"The Gemini {mode} request did not complete. {error} "
-                          "The app stopped before making another attempt.") from None
-
-    status = result.get("status")
-    interaction = result.get("id")
-    valid_id = isinstance(interaction, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,512}", interaction) and key not in interaction
-    status_url = f"{INTERACTIONS_URL}/{interaction}" if valid_id else None
-    if background and status in ("queued", "in_progress"):
-        if not status_url:
-            raise CourseError("Gemini returned an invalid background request ID.")
-        deadline = time.monotonic() + 900
-        phase = status
-        if on_progress:
-            on_progress(phase)
-        poll_delay = FLASH_POLL_INTERVAL
-        while status in ("queued", "in_progress"):
-            remaining = deadline - time.monotonic()
-            if remaining <= poll_delay:
-                raise CourseError("Gemini did not finish within the 15-minute background wait. "
-                                  "Google may still be processing the module. Completed modules are kept.")
-            time.sleep(poll_delay)
-            try:
-                result = send(status_url, headers, None, timeout=min(20, max(1, int(remaining - poll_delay))))
-            except TransientEngineError as error:
-                # Reading the same interaction again cannot start a second generation.
-                if on_progress and phase != "reconnecting":
-                    on_progress("reconnecting")
-                phase = "reconnecting"
-                poll_delay = min(FLASH_MAX_POLL_BACKOFF, poll_delay * 2)
-                if isinstance(error, ProviderUnavailable):
-                    poll_delay = max(poll_delay, error.retry_after)
-                continue
-            poll_delay = FLASH_POLL_INTERVAL
-            status = result.get("status")
-            if on_progress and status in ("queued", "in_progress") and phase != status:
-                phase = status
-                on_progress(phase)
-
-    if background and cleanup and status_url and status in ("completed", "failed", "cancelled", "incomplete", "budget_exceeded"):
-        try:
-            send(status_url, headers, None, timeout=3, method="DELETE")
-        except CourseError:
-            pass  # Retrieval succeeded. A cleanup error must not discard the result.
-
-    if status in ("incomplete", "budget_exceeded"):
-        raise CourseError("Gemini returned an incomplete result. "
-                          "The module was discarded and completed modules are kept.")
-    if status != "completed":
-        label = status if status in ("failed", "cancelled", "requires_action") else "unknown"
-        mode = "background" if background else "direct"
-        reason = _interaction_failure_reason(result)
-        raise CourseError(f"Gemini {mode} generation stopped (status: {label}). "
-                          f"{reason} Completed modules are kept.")
-    try:
-        return "".join(part["text"] for step in result["steps"] if step["type"] == "model_output"
-                       for part in step["content"] if part["type"] == "text")
-    except (KeyError, TypeError):
-        raise CourseError("Gemini returned no usable text for the completed request.") from None
+    return send(url, headers, payload)
 
 
 def gemini_finish_error(reason, output_limit):
@@ -382,23 +251,26 @@ def generate_course(syllabus: str, title: str, config: EngineConfig, *, draft: s
                   "a resources section. References are appended by the app. Aim for about 600–900 words per module "
                   "including questions, with no conversational filler.")
     send = transport or request_json
-    if config.is_gemini_flash:
-        if transport is None:
-            send_interaction = request_json
-        else:
-            def send_interaction(url, headers, payload, *, timeout):
-                return transport(url, headers, payload)
-        text = _flash_interaction(system, prompt, config.api_key.strip(), send_interaction, on_progress,
-                                  background=config.flash_background, cleanup=transport is None)
-    elif config.provider == "Google AI Studio (Gemini)":
+    if config.provider == "Google AI Studio (Gemini)":
         model = config.model.strip().removeprefix("models/")
-        output_limit = 16384
+        is_flash = config.is_gemini_flash
+        output_limit = FLASH_OUTPUT_LIMIT if is_flash else 16384
+        generation_config = {"maxOutputTokens": output_limit}
+        if is_flash:
+            generation_config["thinkingConfig"] = {"thinkingLevel": "high"}
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{quote(model, safe='')}:generateContent"
-        response = send(url, {"x-goog-api-key": config.api_key.strip()}, {
+        headers = {"x-goog-api-key": config.api_key.strip()}
+        payload = {
             "systemInstruction": {"parts": [{"text": system}]},
             "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-            "generationConfig": {"maxOutputTokens": output_limit},
-        })
+            "generationConfig": generation_config,
+        }
+        if is_flash:
+            if transport is None:
+                send = partial(request_json, timeout=FLASH_TIMEOUT)
+            response = _submit_flash(send, url, headers, payload, on_progress)
+        else:
+            response = send(url, headers, payload)
         try:
             candidate = response["candidates"][0]
             if candidate.get("finishReason") != "STOP":

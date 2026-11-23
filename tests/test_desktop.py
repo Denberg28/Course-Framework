@@ -136,15 +136,21 @@ class DesktopTests(unittest.TestCase):
         self.assertEqual(str(self.app.apply_button.cget('state')), 'disabled')
 
     def test_model_selection_and_online_consent_prevent_accidental_call(self):
+        from course_workflow import GEMINI_MODELS
         self.assertEqual(self.app.model.get(), 'gemini-3.5-flash-lite')
         self.app.set_source(SAMPLE)
-        self.assertEqual(self.app.model_picker['values'], ('gemini-3.5-flash-lite',))
-        self.app.model.set('gemini-3.8-flash')  # Simulate an obsolete selection.
+        self.assertEqual(self.app.model_picker['values'], GEMINI_MODELS)
+        self.app.model.set('gemini-4-hydrogen')
         self.app.key.set('fake-key')
         with patch('desktop.advance', side_effect=AssertionError('not allowed')), patch('desktop.messagebox.showerror'):
             self.app.start()
         self.assertFalse(self.app.busy)
-        self.assertEqual(self.app.config().model, 'gemini-3.5-flash-lite')
+        self.assertEqual(self.app.config().model, 'gemini-4-hydrogen')
+        # Restoring a saved Gemini 4 partial project keeps its provider and model.
+        job = new_job(SAMPLE, '', self.app.config(), [0, 1])
+        self.app.set_project(make_project(SAMPLE, 'Structures', '', PROVIDERS[1], model='gemini-4-hydrogen', pending=job))
+        self.assertEqual(self.app.provider.get(), PROVIDERS[1])
+        self.assertEqual(self.app.model.get(), 'gemini-4-hydrogen')
         self.app.provider.set(PROVIDERS[2])
         self.app.provider_changed()
         self.assertEqual(self.app.key.get(), '')

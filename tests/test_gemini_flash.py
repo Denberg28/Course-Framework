@@ -56,3 +56,24 @@ class GeminiFlashTests(unittest.TestCase):
                     generate_course(SOURCE, '', self.config)
                 self.assertEqual(send.call_count, calls)
                 self.assertEqual([c.args[0] for c in sleep.call_args_list], delays)
+
+    def test_gemini_4_models_recover_from_http_503_with_expected_reasoning(self):
+        for model, level in (('gemini-4-hydrogen', 'medium'), ('gemini-4-neon', 'medium'),
+                             ('gemini-4-argon', 'medium'), ('gemini-4-carbon', 'high')):
+            url = f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent'
+            cfg = EngineConfig('Google AI Studio (Gemini)', 'fake-secret', model)
+            overloaded = HTTPError(url, 503, 'fake-secret', {'Retry-After': '12'}, io.BytesIO())
+            success = io.BytesIO(json.dumps(response(MODULE)).encode())
+            progress = []
+            with self.subTest(model=model), patch('engines.build_opener') as opener, patch('engines.time.sleep') as sleep:
+                send = opener.return_value.open
+                send.side_effect = [overloaded, success]
+                job = advance(new_job(SOURCE, '', cfg), cfg, on_progress=progress.append)
+            self.assertEqual(len(job['completed']), 1)
+            self.assertEqual(progress, ['retrying'])
+            sleep.assert_called_once_with(12)
+            req = send.call_args_list[-1].args[0]
+            payload = json.loads(req.data)
+            self.assertEqual(req.full_url, url)
+            self.assertEqual(payload['generationConfig']['maxOutputTokens'], 65536)
+            self.assertEqual(payload['generationConfig']['thinkingConfig']['thinkingLevel'], level)

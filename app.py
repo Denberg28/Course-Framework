@@ -5,7 +5,7 @@ import streamlit as st
 from academy_theme import streamlit_css, streamlit_header
 from course_core import (CourseError, VERSION, analyze_syllabus, course_allocation, export_bundle,
                          extract_text, load_project, make_project, project_bytes)
-from engines import EngineConfig, PROVIDERS
+from engines import EngineConfig, PROVIDERS, gemini_request_settings
 from hosted_keys import gemini_secret
 from lesson_format import presentation_parts
 from course_workflow import (CUSTOM_MODEL, GEMINI_MODELS, accept_job, advance, can_resume,
@@ -66,7 +66,8 @@ def config():
     model = state.custom_model.strip() if state.model_choice == CUSTOM_MODEL else state.model_choice
     key = state.get('api_key', '')
     if state.provider == PROVIDERS[1]:
-        model = GEMINI_MODELS[0]
+        if state.model_choice != CUSTOM_MODEL and model not in GEMINI_MODELS:
+            model = GEMINI_MODELS[0]
         key = gemini_secret(st.secrets) or key
     return EngineConfig(state.provider, key, model, state.get('endpoint', 'https://api.openai.com/v1'))
 
@@ -125,15 +126,13 @@ def open_project():
                 if state.provider != job['provider']:
                     state.api_key, state.online_consent = '', False
                 state.provider = job['provider']
-                state.model_choice = (GEMINI_MODELS[0] if state.provider == PROVIDERS[1] else
-                                      'Offline template' if state.provider == PROVIDERS[0] else CUSTOM_MODEL)
+                if state.provider == PROVIDERS[1]:
+                    canonical = job['model'].removeprefix('models/')
+                    state.model_choice = canonical if canonical in GEMINI_MODELS else CUSTOM_MODEL
+                else:
+                    state.model_choice = 'Offline template' if state.provider == PROVIDERS[0] else CUSTOM_MODEL
                 state.custom_model = job['model']
-        job = saved['pending']
-        if (job and not is_complete(job) and job['provider'] == PROVIDERS[1]
-                and job['model'].removeprefix('models/') != GEMINI_MODELS[0]):
-            notify('Project opened. Your previous draft is available. Generate starts a new Flash-Lite draft.')
-        else:
-            notify('Project opened. Set the original agent/endpoint and session key to resume.')
+        notify('Project opened. Set the original agent/endpoint and session key to resume.')
     except CourseError as error:
         notify(str(error), True)
 
@@ -233,13 +232,15 @@ with st.container(key='syllabus_input'):
     if state.get('module_scope', -1) not in scope_options:
         state.module_scope = -1
     agent, key = st.columns(2)
-    options = (GEMINI_MODELS if state.provider == PROVIDERS[1] else
+    options = ([*GEMINI_MODELS, CUSTOM_MODEL] if state.provider == PROVIDERS[1] else
                ['Offline template'] if state.provider == PROVIDERS[0] else [CUSTOM_MODEL])
     if state.model_choice not in options:
         state.model_choice = options[0]
     agent.selectbox('Agent model', options, key='model_choice',
                     on_change=clear_generation_status, disabled=len(options) == 1,
-                    help='Gemini generation uses 3.5 Flash-Lite. Choose a different provider in Settings & files.')
+                    help='Choose a Gemini 4 or 3.x agent model (3.5 Flash-Lite is fastest; 4 Hydrogen is free/paid; 4 Neon, Carbon, and Argon require a paid tier), or choose a different provider in Settings & files.')
+    if state.provider == PROVIDERS[1] and state.model_choice != CUSTOM_MODEL:
+        agent.caption(gemini_request_settings(state.model_choice)['summary'])
     hosted_key = ''
     if state.provider == PROVIDERS[1]:
         try:

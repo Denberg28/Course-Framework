@@ -109,3 +109,38 @@ class LessonFormatTests(unittest.TestCase):
             with self.subTest(heading=heading):
                 source = f'Course Name: Research\nWeek 1: Design\n{heading}\nAuthor. Research book. 1995.'
                 self.assertEqual(select_references(source, 'Design')[0]['title'], 'Author. Research book. 1995.')
+
+    def test_sanitize_generated_markdown_strips_unsafe_markup_controls_and_fences(self):
+        from lesson_format import sanitize_generated_markdown
+        dirty = ('```markdown\r\n'
+                 '\ufeff### Discussion and presentation\u202e\n'
+                 'If x < y and y > 0, check `F = m*a`.\n'
+                 '<script>alert(1)</script><iframe src="https://evil.example"></iframe>\n'
+                 'See [click](javascript:alert(1)) and [img](data:text/html,hi) and file://etc/passwd\n'
+                 '<!-- hidden comment -->\n\n\n\n'
+                 '#### Summary\nClean ending.\r\n```')
+        cleaned = sanitize_generated_markdown(dirty)
+        self.assertFalse(cleaned.startswith('```'))
+        self.assertNotIn('\u202e', cleaned)
+        self.assertNotIn('\ufeff', cleaned)
+        self.assertNotIn('<script>', cleaned)
+        self.assertNotIn('<iframe', cleaned)
+        self.assertNotIn('javascript:', cleaned)
+        self.assertNotIn('data:text/html', cleaned)
+        self.assertNotIn('hidden comment', cleaned)
+        self.assertIn('If x < y and y > 0, check `F = m*a`.', cleaned)
+        self.assertIn('[unsafe link removed]', cleaned)
+        self.assertNotIn('\n\n\n', cleaned)
+
+    def test_html_presentation_renders_tables_lists_blockquotes_and_module_toc(self):
+        md = ('> Draft · instructor review required.\n\n'
+              '| Module | Topic | Week(s) |\n|---|---|---|\n| 1 | Load paths | 1 |\n\n'
+              '## Module 1: Load paths\n' + MODULE)
+        page = export_html('Aircraft Structures', md).decode()
+        self.assertIn('<nav class="toc"', page)
+        self.assertIn('href="#module-1"', page)
+        self.assertIn('id="module-1"', page)
+        self.assertIn('<table><thead><tr><th>Module</th>', page)
+        self.assertIn('<blockquote>Draft · instructor review required.</blockquote>', page)
+        self.assertIn('<ol><li>Begin with a diagram', page)
+        self.assertNotIn('<script>', page)

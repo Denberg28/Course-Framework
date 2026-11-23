@@ -10,7 +10,7 @@ import re
 import tempfile
 import zipfile
 
-VERSION = "0.3.15-rc.1"
+VERSION = "0.4.0-rc.1"
 MAX_FILE_BYTES = 8 * 1024 * 1024
 MAX_TEXT = 180_000
 MAX_OUTPUT = 400_000
@@ -508,51 +508,142 @@ def export_html(title: str, content: str) -> bytes:
     from lesson_format import presentation_parts
     from urllib.parse import urlsplit
 
+    def style_plain(raw):
+        escaped = html.escape(raw)
+        pieces = re.split(r'(`[^`\n]+`)', escaped)
+        out = []
+        for piece in pieces:
+            if len(piece) >= 2 and piece.startswith('`') and piece.endswith('`'):
+                out.append(f'<code>{piece[1:-1]}</code>')
+            else:
+                piece = re.sub(r'\*\*([^*]+)\*\*', r'<strong>\1</strong>', piece)
+                piece = re.sub(r'(?<!\*)\*(?!\s)([^*]+?)(?<!\s)\*(?!\*)', r'<em>\1</em>', piece)
+                out.append(piece)
+        return ''.join(out)
+
     def inline(text):
         chunks, position = [], 0
         for match in re.finditer(r"\[([^\]]+)\]\((https?://[^\s)]+)\)", text):
-            chunks.append(html.escape(text[position:match.start()]))
+            chunks.append(style_plain(text[position:match.start()]))
             try:
                 url = urlsplit(match[2])
                 safe = url.scheme in {'http', 'https'} and url.hostname and not url.username and not url.password
             except ValueError:
                 safe = False
-            chunks.append(f'<a href="{html.escape(match[2], quote=True)}" rel="noopener noreferrer">{html.escape(match[1])}</a>' if safe else html.escape(match[0]))
+            chunks.append(f'<a href="{html.escape(match[2], quote=True)}" rel="noopener noreferrer">{style_plain(match[1])}</a>' if safe else style_plain(match[0]))
             position = match.end()
-        chunks.append(html.escape(text[position:]))
-        return re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", ''.join(chunks))
+        chunks.append(style_plain(text[position:]))
+        return ''.join(chunks)
+
+    def table_cells(line):
+        stripped = line.strip()
+        if stripped.startswith('|'):
+            stripped = stripped[1:]
+        if stripped.endswith('|'):
+            stripped = stripped[:-1]
+        return [cell.strip() for cell in re.split(r'(?<!\\)\|', stripped)]
+
+    def is_table_divider(line):
+        cells = table_cells(line)
+        return bool(cells) and all(re.fullmatch(r':?-{2,}:?', cell.replace(' ', '')) for cell in cells)
 
     def body(text):
-        lines = []
-        for line in text.splitlines():
+        raw_lines = text.splitlines()
+        out = []
+        i = 0
+        while i < len(raw_lines):
+            line = raw_lines[i]
             if not line.strip():
+                i += 1
                 continue
             heading = re.match(r'^(#{1,6})\s+(.+)$', line)
             if heading:
                 level = len(heading[1])
                 if level != 1:
-                    lines.append(f'<h{level}>{inline(heading[2])}</h{level}>')
-            else:
-                lines.append('<p>' + inline(line) + '</p>')
-        return '\n'.join(lines)
+                    out.append(f'<h{level}>{inline(heading[2])}</h{level}>')
+                i += 1
+                continue
+            if ('|' in line and i + 1 < len(raw_lines) and '|' in raw_lines[i + 1]
+                    and is_table_divider(raw_lines[i + 1])):
+                headers = table_cells(line)
+                i += 2
+                rows = []
+                while i < len(raw_lines) and raw_lines[i].strip() and '|' in raw_lines[i]:
+                    rows.append(table_cells(raw_lines[i]))
+                    i += 1
+                thead = ''.join(f'<th>{inline(cell)}</th>' for cell in headers)
+                tbody = ''.join('<tr>' + ''.join(f'<td>{inline(cell)}</td>' for cell in row) + '</tr>' for row in rows)
+                out.append(f'<table><thead><tr>{thead}</tr></thead><tbody>{tbody}</tbody></table>')
+                continue
+            if line.lstrip().startswith('>'):
+                quote_lines = []
+                while i < len(raw_lines) and raw_lines[i].lstrip().startswith('>'):
+                    quote_lines.append(re.sub(r'^\s*>\s?', '', raw_lines[i]))
+                    i += 1
+                out.append('<blockquote>' + '<br>'.join(inline(q) for q in quote_lines) + '</blockquote>')
+                continue
+            if re.match(r'^\s*[-*•]\s+\S', line):
+                items = []
+                while i < len(raw_lines) and re.match(r'^\s*[-*•]\s+\S', raw_lines[i]):
+                    items.append(re.sub(r'^\s*[-*•]\s+', '', raw_lines[i]))
+                    i += 1
+                out.append('<ul>' + ''.join(f'<li>{inline(item)}</li>' for item in items) + '</ul>')
+                continue
+            if re.match(r'^\s*\d+[.)]\s+\S', line):
+                items = []
+                while i < len(raw_lines) and re.match(r'^\s*\d+[.)]\s+\S', raw_lines[i]):
+                    items.append(re.sub(r'^\s*\d+[.)]\s+', '', raw_lines[i]))
+                    i += 1
+                out.append('<ol>' + ''.join(f'<li>{inline(item)}</li>' for item in items) + '</ol>')
+                continue
+            out.append('<p>' + inline(line) + '</p>')
+            i += 1
+        return '\n'.join(out)
 
-    sections = [f'<h1>{html.escape(title)}</h1>']
-    for part in presentation_parts(content):
-        sections.append('<article>')
+    parts = presentation_parts(content)
+    toc_links = []
+    module_index = 0
+    articles = []
+    for part in parts:
         if part['title']:
-            sections.append(body(part['title']))
-        sections.append(body(part['body']))
+            module_index += 1
+            anchor = f'module-{module_index}'
+            clean_title = re.sub(r'^#{1,6}\s+', '', part['title']).strip()
+            toc_links.append(f'<a href="#{anchor}">{html.escape(clean_title)}</a>')
+            article_parts = [f'<article class="module" id="{anchor}">', body(part['title'])]
+        else:
+            article_parts = ['<article class="overview">']
+        article_parts.append(body(part['body']))
         for label, key in [('Assessment', 'assessment'), ('Answer key', 'key'), ('References', 'references')]:
             if part[key]:
-                sections.append(f'<details><summary>{label}</summary>{body(part[key])}</details>')
-        sections.append('</article>')
+                article_parts.append(f'<details><summary>{label}</summary>{body(part[key])}</details>')
+        article_parts.append('</article>')
+        articles.append(''.join(article_parts))
+    toc = (f'<nav class="toc" aria-label="Course modules"><strong>Modules</strong><div>'
+           f'{"".join(toc_links)}</div></nav>') if toc_links else ''
+    sections = [f'<header class="deck-header"><h1>{html.escape(title)}</h1>{toc}</header>', *articles]
     document = f"""<!doctype html><html lang="en"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{html.escape(title)}</title><style>
-body{{font:16px/1.65 system-ui,sans-serif;max-width:960px;margin:32px auto;padding:0 24px;color:#102640;background:#fff}}
-article{{margin:20px 0 36px}}h2{{border-bottom:2px solid #e6b844;padding-bottom:8px}}h3{{margin-top:24px}}
-p{{white-space:pre-wrap;overflow-wrap:anywhere;margin:7px 0}}details{{border:1px solid #e4e9f0;border-radius:6px;padding:12px 16px;margin:12px 0}}
-summary{{cursor:pointer;font-weight:600}}a{{color:#203d65}}@media print{{body{{margin:0}}details{{break-inside:avoid}}}}
+body{{font:16px/1.65 system-ui,-apple-system,Segoe UI,sans-serif;max-width:980px;margin:28px auto;padding:0 24px;color:#102640;background:#fff}}
+.deck-header{{border-bottom:3px solid #e6b844;padding-bottom:16px;margin-bottom:24px}}
+.deck-header h1{{margin:0 0 10px;font-size:1.85rem}}
+.toc{{background:#fafbfd;border:1px solid #e4e9f0;border-radius:8px;padding:12px 16px;margin-top:12px}}
+.toc strong{{display:block;font-size:.82rem;text-transform:uppercase;letter-spacing:.05em;color:#536174;margin-bottom:6px}}
+.toc div{{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.92rem}}
+article{{margin:20px 0 36px}}
+article.module{{background:#fff;border:1px solid #e4e9f0;border-radius:10px;padding:20px 24px;box-shadow:0 1px 3px rgba(16,38,64,.04)}}
+h2{{border-bottom:2px solid #e6b844;padding-bottom:8px;margin-top:0}}
+h3{{margin-top:22px;color:#102640}}h4{{margin:16px 0 6px;color:#203d65}}
+p{{white-space:pre-wrap;overflow-wrap:anywhere;margin:7px 0}}
+ul,ol{{margin:8px 0 12px;padding-left:1.5rem}}li{{margin:5px 0}}
+blockquote{{margin:10px 0;padding:10px 14px;background:#fff7df;border-left:4px solid #e6b844;border-radius:4px}}
+code{{background:#fafbfd;border:1px solid #e4e9f0;border-radius:4px;padding:1px 5px;font-size:.9em}}
+table{{width:100%;border-collapse:collapse;margin:12px 0;font-size:.94rem}}
+th,td{{border:1px solid #e4e9f0;padding:8px 10px;text-align:left}}th{{background:#fafbfd;font-weight:600}}
+details{{border:1px solid #e4e9f0;border-radius:6px;padding:12px 16px;margin:12px 0;background:#fafbfd}}
+summary{{cursor:pointer;font-weight:600}}a{{color:#203d65;text-decoration:none}}a:hover{{text-decoration:underline}}
+@media print{{body{{margin:0;max-width:none}}.toc{{display:none}}article.module{{border:none;box-shadow:none;padding:0;break-before:page}}details{{break-inside:avoid}}}}
 </style>{''.join(sections)}</html>"""
     return document.encode('utf-8')
 

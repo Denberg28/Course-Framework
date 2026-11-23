@@ -1,10 +1,36 @@
-"""Teaching-module structure and assessment validation; no UI or network dependency."""
+"""Teaching-module structure, output sanitization, and assessment validation; no UI or network dependency."""
 from __future__ import annotations
 import re
 from course_core import CourseError
 
 DISCUSSION = 'Discussion and presentation'
 SECTIONS = (DISCUSSION, 'Activity', 'Assessment', 'Answer key')
+
+# Strip C0/C1 control chars (except tab/newline) and Unicode bidi/spoofing overrides.
+_UNSAFE_CONTROLS = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff]')
+_DANGEROUS_HTML_BLOCKS = re.compile(
+    r'(?is)<(script|style|iframe|object|form)\b[^>]*>.*?</\1\s*>'
+    r'|<(?:script|style|iframe|object|embed|form)\b[^>]*/?>'
+    r'|<!--.*?-->'
+)
+_UNSAFE_MD_LINK = re.compile(r'!?\[([^\]]*)\]\(\s*(?:javascript|vbscript|data|file)\s*:[^)]*\)', re.I)
+_UNSAFE_BARE_URI = re.compile(r'(?i)\b(?:javascript|vbscript):[^\s<>"\)]+|data:text/html[^\s<>"\)]*')
+_OUTER_FENCE = re.compile(r'^\s*```(?:markdown|md)?\s*\n(.*?)\n```\s*$', re.I | re.S)
+
+
+def sanitize_generated_markdown(text: str) -> str:
+    """Sanitize untrusted model Markdown while preserving teaching prose and math."""
+    text = text.replace('\r\n', '\n').replace('\r', '\n')
+    text = _UNSAFE_CONTROLS.sub('', text)
+    fenced = _OUTER_FENCE.match(text)
+    if fenced:
+        text = fenced[1]
+    text = _DANGEROUS_HTML_BLOCKS.sub('', text)
+    text = _UNSAFE_MD_LINK.sub(lambda m: (m[1].strip() + ' ' if m[1].strip() else '') + '[unsafe link removed]', text)
+    text = _UNSAFE_BARE_URI.sub('[unsafe link removed]', text)
+    text = '\n'.join(line.rstrip() for line in text.splitlines())
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    return text.strip()
 
 
 def section_body(text, heading):

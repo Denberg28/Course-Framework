@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.0-rc.1 — Gemini 4 agent models, sanitization, and presentation upgrade
+
+- Add Google's Gemini 4 agent models (**Gemini 4 Hydrogen** `gemini-4-hydrogen`, **Gemini 4 Neon** `gemini-4-neon`, **Gemini 4 Carbon** `gemini-4-carbon`, **Gemini 4 Argon** `gemini-4-argon`) alongside **Gemini 3.8 Flash** (`gemini-3.8-flash`), **Gemini 3.5 Flash-Lite** (`gemini-3.5-flash-lite`, default), and custom Gemini model IDs in both Streamlit and Windows desktop.
+- Centralize Gemini model transport settings in `GEMINI_MODEL_SPECS` / `gemini_request_settings`: Gemini 4 models use `generateContent`, a 65,536-token ceiling (covering thinking + output), `medium` reasoning (`high` for Carbon), a 300-second connection/read timeout, and bounded HTTP 503 overload retries without replaying ambiguous timeouts or quota errors. Keep the shared syllabus/reference prompt prefix stable across modules to benefit from Gemini 4 implicit context caching, and avoid redundant syllabus parsing in sequential module generation.
+- Harden sanitization across inputs, credentials, and model outputs: reject path-traversal/malformed model IDs, check raw and URL-encoded reflected API keys, guard mixed/non-dict Gemini response parts while discarding `thought` parts, and strip control/bidi override characters, outer Markdown code-fence wrappers, raw active HTML blocks (`<script>`, `<style>`, `<iframe>`, `<object>`, `<embed>`, `<form>`), and unsafe URL schemes (`javascript:`, `data:`, `vbscript:`, `file:`) via `sanitize_generated_markdown`.
+- Enhance teaching module prompts for slide-ready presentation segments and upgrade static `export_html` lesson presentations with rendered Markdown tables, ordered/unordered lists, blockquotes, inline code/emphasis, a static module navigation bar, and print page breaks while maintaining full HTML escaping and zero scripts.
+- Restore recorded Gemini models when opening saved partial projects in both Streamlit and Windows.
+
 ## 0.3.15-rc.1 — Flash-Lite only for Gemini
 
 - Use Gemini 3.5 Flash-Lite for all Gemini generation in Streamlit and Windows. Preserve accepted courses, saved drafts, offline templates, and custom compatible-provider settings.

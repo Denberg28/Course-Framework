@@ -176,6 +176,7 @@ async function main() {
     await page.getByTestId('stExpander').filter({ has: page.getByText('Settings & files', { exact: true }) }).locator('summary').click();
     await choose('Provider', 'Google AI Studio (Gemini)');
     await page.getByTestId('stExpander').filter({ has: page.getByText('Settings & files', { exact: true }) }).locator('summary').click();
+    await choose('Agent model', 'gemini-4-hydrogen');
     await page.getByText('Send syllabus to this agent (fees/quota may apply)', { exact: true }).click();
     await page.waitForFunction(() => document.querySelector('input[aria-label="Send syllabus to this agent (fees/quota may apply)"]')?.checked);
     await page.setViewportSize({ width: 390, height: 844 });

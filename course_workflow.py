@@ -6,11 +6,11 @@ import re
 
 from course_core import (CourseError, MAX_OUTPUT, analyze_syllabus, bounded_text,
                          course_allocation, make_project, topic_allocation, validate_pending)
-from engines import DEFAULT_GEMINI_MODEL, EngineConfig, generate_course
+from engines import DEFAULT_GEMINI_MODEL, GEMINI_MODEL_IDS, EngineConfig, generate_course
 from reference_catalog import reference_section, restrict_generated_reference_links
-from lesson_format import lesson_review_notes
+from lesson_format import lesson_review_notes, sanitize_generated_markdown
 
-GEMINI_MODELS = (DEFAULT_GEMINI_MODEL,)
+GEMINI_MODELS = GEMINI_MODEL_IDS
 CUSTOM_MODEL = 'Custom model…'
 
 
@@ -83,10 +83,11 @@ def advance(job, config, *, transport=None, on_progress=None):
     if is_complete(job):
         return job
     index = job['indices'][len(job['completed'])]
-    topic = analyze_syllabus(job['syllabus'])['topics'][index]
+    plan = analyze_syllabus(job['syllabus'])
+    topic = plan['topics'][index]
     text = generate_course(job['syllabus'], job['title'], config, module_index=index,
-                           transport=transport, on_progress=on_progress)
-    text = restrict_generated_reference_links(remove_video_sections(text), job['syllabus'])
+                           transport=transport, on_progress=on_progress, plan=plan)
+    text = sanitize_generated_markdown(restrict_generated_reference_links(remove_video_sections(text), job['syllabus']))
     text = re.sub(r'(?ims)^###\s+References\s*\n.*?(?=^#{1,3}\s|\Z)', '', text)
     original = text
     text = re.sub(r'(?m)^#{1,2} .+\n?', '', text)

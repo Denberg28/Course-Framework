@@ -90,25 +90,45 @@ class StreamlitTests(unittest.TestCase):
         self.assertIn('## Module 13: Pre-Deployment Seminar and Internship Requirements', self.app.session_state['content'])
         self.assertEqual(self.app.session_state['source'], source)
 
-    def test_flash_lite_is_the_only_gemini_model_after_a_stale_selection(self):
-        model = 'gemini-3.5-flash-lite'
-        self.assertEqual(self.app.selectbox(key='model_choice').options, [model])
-        self.app = AppTest.from_file('app.py', default_timeout=30)
-        self.app.session_state['model_choice'] = 'gemini-3.8-flash'
-        self.app.run()
-        self.assertEqual(self.app.session_state['model_choice'], model)
+    def test_gemini_4_and_flash_models_selectable_and_stale_selection_resets(self):
+        from course_workflow import CUSTOM_MODEL, GEMINI_MODELS
+        self.assertEqual(self.app.selectbox(key='model_choice').options, [*GEMINI_MODELS, CUSTOM_MODEL])
+        self.assertEqual(self.app.session_state['model_choice'], 'gemini-3.5-flash-lite')
+        for model in ('gemini-4-hydrogen', 'gemini-4-neon', 'gemini-4-carbon', 'gemini-4-argon', 'gemini-3.8-flash'):
+            self.assertIn(model, self.app.selectbox(key='model_choice').options)
+        # Stale/removed session model resets cleanly to the default.
+        stale = AppTest.from_file('app.py', default_timeout=30)
+        stale.session_state['model_choice'] = 'removed-legacy-model'
+        stale.run()
+        self.assertEqual(stale.session_state['model_choice'], 'gemini-3.5-flash-lite')
+        # Select Gemini 4 Hydrogen and verify endpoint, 65,536 token cap, and medium reasoning.
         source = 'drone 101\n1. drone componenta'
+        self.app.selectbox(key='model_choice').select('gemini-4-hydrogen').run()
         self.app.text_area(key='source').set_value(source).run()
         self.app.text_input(key='api_key').set_value('fake-key').run()
         self.app.checkbox(key='online_consent').check().run()
         with patch('engines.request_json', return_value=response()) as send:
             self.click('Generate')
             send.assert_called_once()
-            self.assertIn('/gemini-3.5-flash-lite:generateContent', send.call_args.args[0])
+            self.assertIn('/gemini-4-hydrogen:generateContent', send.call_args.args[0])
+            self.assertEqual(send.call_args.args[2]['generationConfig'], {
+                'maxOutputTokens': 65536, 'thinkingConfig': {'thinkingLevel': 'medium'},
+            })
+            self.assertEqual(send.call_args.kwargs['timeout'], 300)
         pending = self.app.session_state['pending']
-        self.assertEqual(pending['model'], model)
+        self.assertEqual(pending['model'], 'gemini-4-hydrogen')
         self.assertIn('## Module 1: drone componenta', pending['completed'][0])
         self.assertEqual(self.app.session_state['generation_status']['text'], 'Draft ready · 1/1 complete')
+        # Verify Gemini 4 Carbon routes with high reasoning and 65,536 token cap.
+        self.app.selectbox(key='model_choice').select('gemini-4-carbon').run()
+        with patch('engines.request_json', return_value=response()) as send:
+            self.click('Generate')
+            send.assert_called_once()
+            self.assertIn('/gemini-4-carbon:generateContent', send.call_args.args[0])
+            self.assertEqual(send.call_args.args[2]['generationConfig'], {
+                'maxOutputTokens': 65536, 'thinkingConfig': {'thinkingLevel': 'high'},
+            })
+        self.assertEqual(self.app.session_state['pending']['model'], 'gemini-4-carbon')
 
     def test_direct_generate_use_edit_and_download_survive_rerun(self):
         self.assertEqual(len(self.app.tabs), 0)

@@ -28,24 +28,47 @@ class EngineTests(unittest.TestCase):
 
     def test_flash_reasoning_settings_reach_the_request_wrapper(self):
         prompts = []
-        for model in ('gemini-3.8-flash', 'models/gemini-3.8-flash', 'gemini-3.5-flash-lite', 'custom-model'):
+        cases = [
+            ('gemini-3.8-flash', 300, {'maxOutputTokens': 32768, 'thinkingConfig': {'thinkingLevel': 'high'}}),
+            ('models/gemini-3.8-flash', 300, {'maxOutputTokens': 32768, 'thinkingConfig': {'thinkingLevel': 'high'}}),
+            ('gemini-4-hydrogen', 300, {'maxOutputTokens': 65536, 'thinkingConfig': {'thinkingLevel': 'medium'}}),
+            ('models/gemini-4-hydrogen', 300, {'maxOutputTokens': 65536, 'thinkingConfig': {'thinkingLevel': 'medium'}}),
+            ('gemini-4-neon', 300, {'maxOutputTokens': 65536, 'thinkingConfig': {'thinkingLevel': 'medium'}}),
+            ('gemini-4-argon', 300, {'maxOutputTokens': 65536, 'thinkingConfig': {'thinkingLevel': 'medium'}}),
+            ('gemini-4-carbon', 300, {'maxOutputTokens': 65536, 'thinkingConfig': {'thinkingLevel': 'high'}}),
+            ('gemini-3.5-flash-lite', None, {'maxOutputTokens': 16384}),
+            ('custom-model', None, {'maxOutputTokens': 16384}),
+        ]
+        for model, expected_timeout, expected_gen_config in cases:
             model_id = model.removeprefix('models/')
-            is_flash = model_id == 'gemini-3.8-flash'
             with self.subTest(model=model), patch('engines.request_json', return_value=response()) as send:
                 generate_course(SAMPLE, '', EngineConfig('Google AI Studio (Gemini)', 'fake-secret', model), module_index=0)
                 url, headers, payload = send.call_args.args
                 self.assertTrue(url.endswith(f'/{model_id}:generateContent'))
                 self.assertEqual(headers, {'x-goog-api-key': 'fake-secret'})
                 prompts.append((payload['systemInstruction'], payload['contents']))
-                if is_flash:
-                    self.assertEqual(send.call_args.kwargs['timeout'], 300)
-                    self.assertEqual(payload['generationConfig'], {
-                        'maxOutputTokens': 32768, 'thinkingConfig': {'thinkingLevel': 'high'},
-                    })
+                self.assertEqual(payload['generationConfig'], expected_gen_config)
+                if expected_timeout is not None:
+                    self.assertEqual(send.call_args.kwargs['timeout'], expected_timeout)
                 else:
                     self.assertNotIn('timeout', send.call_args.kwargs)
-                    self.assertEqual(payload['generationConfig'], {'maxOutputTokens': 16384})
         self.assertTrue(all(prompt == prompts[0] for prompt in prompts))
+
+    def test_shared_prompt_prefix_stays_stable_across_modules_for_context_caching(self):
+        payloads = []
+        def send(url, headers, payload):
+            payloads.append(payload)
+            return response()
+        cfg = EngineConfig('Google AI Studio (Gemini)', 'fake-secret', 'gemini-4-hydrogen')
+        generate_course(SAMPLE, 'Structures', cfg, module_index=0, transport=send)
+        generate_course(SAMPLE, 'Structures', cfg, module_index=1, transport=send)
+        self.assertEqual(payloads[0]['systemInstruction'], payloads[1]['systemInstruction'])
+        first = payloads[0]['contents'][0]['parts'][0]['text']
+        second = payloads[1]['contents'][0]['parts'][0]['text']
+        prefix = first.split('\n\nWrite ONLY module', 1)[0]
+        self.assertTrue(second.startswith(prefix))
+        self.assertIn('<syllabus>', prefix)
+        self.assertIn('<syllabus_references>', prefix)
 
     def test_extended_timeout_is_applied_once_and_errors_are_distinct(self):
         for error in (TimeoutError('fake-secret'), URLError(TimeoutError('fake-secret')),
@@ -75,6 +98,10 @@ class EngineTests(unittest.TestCase):
                 generate_course(SAMPLE, '', cfg, transport=lambda *a: answer)
             self.assertIn(expected, str(raised.exception))
             self.assertNotIn('fake-secret', str(raised.exception))
+        carbon_cfg = EngineConfig('Google AI Studio (Gemini)', 'fake-secret', 'gemini-4-carbon')
+        with self.assertRaisesRegex(CourseError, '65,536-token'):
+            generate_course(SAMPLE, '', carbon_cfg,
+                            transport=lambda *a: {'candidates': [{'finishReason': 'MAX_TOKENS', 'content': {'parts': []}}]})
 
     def test_openai_compatible_and_revision(self):
         def send(url, headers, payload):
@@ -91,16 +118,33 @@ class EngineTests(unittest.TestCase):
     def test_reject_missing_key_invalid_model_and_local_revision(self):
         for config, draft in [(EngineConfig('Google AI Studio (Gemini)'), ''),
                               (EngineConfig('Google AI Studio (Gemini)', 'fake', 'bad model'), ''),
+                              (EngineConfig('Google AI Studio (Gemini)', 'fake', '../gemini-4-hydrogen'), ''),
+                              (EngineConfig('Google AI Studio (Gemini)', 'fake', '/gemini-4-hydrogen'), ''),
+                              (EngineConfig('Google AI Studio (Gemini)', 'fake', 'models//gemini-4-hydrogen'), ''),
                               (EngineConfig('Google AI Studio (Gemini)', 'invalid🔑'), ''),
                               (EngineConfig(), 'Draft')]:
             with self.subTest(config=config), self.assertRaises(CourseError):
                 generate_course(SAMPLE, 'Course', config, draft=draft)
 
-    def test_incomplete_or_malformed_provider_output_rejected(self):
-        for response in [{}, {'candidates': []}, {'candidates': [{'finishReason': 'MAX_TOKENS'}]},
-                         {'candidates': [{'finishReason': 'STOP', 'content': {'parts': [{'text': 'fake-secret'}]}}]}]:
-            with self.subTest(response=response), self.assertRaises(CourseError):
-                generate_course(SAMPLE, 'Course', EngineConfig('Google AI Studio (Gemini)', 'fake-secret'), transport=lambda *a: response)
+    def test_incomplete_or_malformed_provider_output_rejected_and_thoughts_sanitized(self):
+        for resp in [{}, {'candidates': []}, {'candidates': [{'finishReason': 'MAX_TOKENS'}]},
+                     {'candidates': [{'finishReason': 'STOP', 'content': {'parts': [{'text': 'fake-secret'}]}}]},
+                     {'candidates': [{'finishReason': 'STOP', 'content': {'parts': [{'text': 'key%2Fsecret'}]}}]}]:
+            with self.subTest(response=resp), self.assertRaises(CourseError):
+                generate_course(SAMPLE, 'Course', EngineConfig('Google AI Studio (Gemini)', 'key/secret' if 'key%2Fsecret' in str(resp) else 'fake-secret'),
+                                transport=lambda *a: resp)
+        mixed = {'candidates': [{'finishReason': 'STOP', 'content': {'parts': [
+            {'thought': True, 'text': 'internal reasoning'},
+            None,
+            {'text': '```markdown\n### Discussion and presentation\nSafe prose <script>bad()</script> [x](javascript:alert(1))\n```'},
+        ]}}]}
+        out = generate_course(SAMPLE, 'Course', EngineConfig('Google AI Studio (Gemini)', 'fake-secret', 'gemini-4-hydrogen'),
+                              transport=lambda *a: mixed)
+        self.assertNotIn('internal reasoning', out)
+        self.assertNotIn('```', out)
+        self.assertNotIn('<script>', out)
+        self.assertNotIn('javascript:', out)
+        self.assertIn('Safe prose', out)
         for reason in ('length', 'content_filter', None):
             with self.assertRaises(CourseError):
                 generate_course(SAMPLE, 'Course', EngineConfig('OpenAI-compatible', 'fake', 'model', 'https://example.com/v1', True),

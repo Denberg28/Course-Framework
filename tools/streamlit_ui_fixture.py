@@ -19,8 +19,12 @@ def simulated_request(url, headers, payload, *, timeout=60):
     # No credential, URL or prompt is logged or sent anywhere.
     if not url.startswith('https://generativelanguage.googleapis.com/'):
         raise engines.CourseError('The UI fixture supports simulated Gemini requests only.')
-    if not url.endswith('/gemini-3.5-flash-lite:generateContent'):
-        raise engines.CourseError('The UI fixture expects Gemini 3.5 Flash-Lite.')
+    matched = next((m for m in engines.GEMINI_MODEL_IDS if url.endswith(f'/{m}:generateContent')), None)
+    if not matched:
+        raise engines.CourseError('The UI fixture supports preset Gemini models only.')
+    expected = engines.gemini_request_settings(matched)
+    if payload.get('generationConfig', {}).get('maxOutputTokens') != expected['output_limit']:
+        raise engines.CourseError('Unexpected maxOutputTokens in UI fixture request.')
     time.sleep(1.2)
     if 'drone 101' in payload['contents'][0]['parts'][0]['text']:
         return response('### Discussion\nIdentify drone components using a supplied diagram.\n\n### Activity\nLabel the diagram and explain each connection.')

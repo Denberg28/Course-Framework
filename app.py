@@ -66,8 +66,7 @@ def config():
     model = state.custom_model.strip() if state.model_choice == CUSTOM_MODEL else state.model_choice
     key = state.get('api_key', '')
     if state.provider == PROVIDERS[1]:
-        if state.model_choice != CUSTOM_MODEL and model not in GEMINI_MODELS:
-            model = GEMINI_MODELS[0]
+        model = state.model_choice if state.model_choice in GEMINI_MODELS else GEMINI_MODELS[0]
         key = gemini_secret(st.secrets) or key
     return EngineConfig(state.provider, key, model, state.get('endpoint', 'https://api.openai.com/v1'))
 
@@ -128,11 +127,16 @@ def open_project():
                 state.provider = job['provider']
                 if state.provider == PROVIDERS[1]:
                     canonical = job['model'].removeprefix('models/')
-                    state.model_choice = canonical if canonical in GEMINI_MODELS else CUSTOM_MODEL
+                    state.model_choice = canonical if canonical in GEMINI_MODELS else GEMINI_MODELS[0]
                 else:
                     state.model_choice = 'Offline template' if state.provider == PROVIDERS[0] else CUSTOM_MODEL
                 state.custom_model = job['model']
-        notify('Project opened. Set the original agent/endpoint and session key to resume.')
+        job = saved['pending']
+        if (job and not is_complete(job) and job['provider'] == PROVIDERS[1]
+                and job['model'].removeprefix('models/') not in GEMINI_MODELS):
+            notify('Project opened. Your previous draft is available. Generate starts a new draft with the selected Gemini model.')
+        else:
+            notify('Project opened. Set the original agent/endpoint and session key to resume.')
     except CourseError as error:
         notify(str(error), True)
 
@@ -232,14 +236,14 @@ with st.container(key='syllabus_input'):
     if state.get('module_scope', -1) not in scope_options:
         state.module_scope = -1
     agent, key = st.columns(2)
-    options = ([*GEMINI_MODELS, CUSTOM_MODEL] if state.provider == PROVIDERS[1] else
+    options = (GEMINI_MODELS if state.provider == PROVIDERS[1] else
                ['Offline template'] if state.provider == PROVIDERS[0] else [CUSTOM_MODEL])
     if state.model_choice not in options:
         state.model_choice = options[0]
     agent.selectbox('Agent model', options, key='model_choice',
                     on_change=clear_generation_status, disabled=len(options) == 1,
-                    help='Choose a Gemini 4 or 3.x agent model (3.5 Flash-Lite is fastest; 4 Hydrogen is free/paid; 4 Neon, Carbon, and Argon require a paid tier), or choose a different provider in Settings & files.')
-    if state.provider == PROVIDERS[1] and state.model_choice != CUSTOM_MODEL:
+                    help='Choose Gemini 3.5 Flash-Lite (fast, low-cost) or Gemini 4 Hydrogen (balanced teaching agent). Other providers are under Settings & files.')
+    if state.provider == PROVIDERS[1]:
         agent.caption(gemini_request_settings(state.model_choice)['summary'])
     hosted_key = ''
     if state.provider == PROVIDERS[1]:

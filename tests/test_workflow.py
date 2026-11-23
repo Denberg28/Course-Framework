@@ -65,7 +65,7 @@ def response(text=MODULE, finish_reason='STOP'):
 
 class WorkflowTests(unittest.TestCase):
     def setUp(self):
-        self.config = EngineConfig('Google AI Studio (Gemini)', 'fake-secret', 'gemini-3.8-flash')
+        self.config = EngineConfig('Google AI Studio (Gemini)', 'fake-secret', 'gemini-4-hydrogen')
 
     def test_simple_drone_outline_creates_two_modules_with_review_notes(self):
         source = Path('examples/drone101-topics.txt').read_text(encoding='utf-8')

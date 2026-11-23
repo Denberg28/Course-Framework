@@ -11,12 +11,12 @@ from test_workflow import MODULE, response
 
 
 SOURCE = 'drone 101\n1. drone componenta'
-URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent'
+URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-4-hydrogen:generateContent'
 
 
 class GeminiFlashTests(unittest.TestCase):
     def setUp(self):
-        self.config = EngineConfig('Google AI Studio (Gemini)', 'fake-secret', 'gemini-3.8-flash')
+        self.config = EngineConfig('Google AI Studio (Gemini)', 'fake-secret', 'gemini-4-hydrogen')
 
     def test_uncertain_submission_is_not_replayed(self):
         for error in (TimeoutError('fake-secret'), HTTPError(URL, 504, 'fake-secret', {}, io.BytesIO())):
@@ -44,7 +44,8 @@ class GeminiFlashTests(unittest.TestCase):
         payload = json.loads(second.data)
         self.assertEqual(first.full_url, URL)
         self.assertEqual(second.full_url, URL)
-        self.assertEqual(payload['generationConfig']['thinkingConfig']['thinkingLevel'], 'high')
+        self.assertEqual(payload['generationConfig']['maxOutputTokens'], 65536)
+        self.assertEqual(payload['generationConfig']['thinkingConfig']['thinkingLevel'], 'medium')
         self.assertIn(SOURCE, payload['contents'][0]['parts'][0]['text'])
         self.assertIn('## Module 1: drone componenta', job['completed'][0])
 
@@ -57,23 +58,20 @@ class GeminiFlashTests(unittest.TestCase):
                 self.assertEqual(send.call_count, calls)
                 self.assertEqual([c.args[0] for c in sleep.call_args_list], delays)
 
-    def test_gemini_4_models_recover_from_http_503_with_expected_reasoning(self):
-        for model, level in (('gemini-4-hydrogen', 'medium'), ('gemini-4-neon', 'medium'),
-                             ('gemini-4-argon', 'medium'), ('gemini-4-carbon', 'high')):
-            url = f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent'
-            cfg = EngineConfig('Google AI Studio (Gemini)', 'fake-secret', model)
-            overloaded = HTTPError(url, 503, 'fake-secret', {'Retry-After': '12'}, io.BytesIO())
-            success = io.BytesIO(json.dumps(response(MODULE)).encode())
-            progress = []
-            with self.subTest(model=model), patch('engines.build_opener') as opener, patch('engines.time.sleep') as sleep:
-                send = opener.return_value.open
-                send.side_effect = [overloaded, success]
-                job = advance(new_job(SOURCE, '', cfg), cfg, on_progress=progress.append)
-            self.assertEqual(len(job['completed']), 1)
-            self.assertEqual(progress, ['retrying'])
-            sleep.assert_called_once_with(12)
-            req = send.call_args_list[-1].args[0]
-            payload = json.loads(req.data)
-            self.assertEqual(req.full_url, url)
-            self.assertEqual(payload['generationConfig']['maxOutputTokens'], 65536)
-            self.assertEqual(payload['generationConfig']['thinkingConfig']['thinkingLevel'], level)
+    def test_flash_lite_also_recovers_from_http_503_without_thinking_config(self):
+        url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent'
+        cfg = EngineConfig('Google AI Studio (Gemini)', 'fake-secret', 'gemini-3.5-flash-lite')
+        overloaded = HTTPError(url, 503, 'fake-secret', {'Retry-After': '12'}, io.BytesIO())
+        success = io.BytesIO(json.dumps(response(MODULE)).encode())
+        progress = []
+        with patch('engines.build_opener') as opener, patch('engines.time.sleep') as sleep:
+            send = opener.return_value.open
+            send.side_effect = [overloaded, success]
+            job = advance(new_job(SOURCE, '', cfg), cfg, on_progress=progress.append)
+        self.assertEqual(len(job['completed']), 1)
+        self.assertEqual(progress, ['retrying'])
+        sleep.assert_called_once_with(12)
+        req = send.call_args_list[-1].args[0]
+        payload = json.loads(req.data)
+        self.assertEqual(req.full_url, url)
+        self.assertEqual(payload['generationConfig'], {'maxOutputTokens': 16384})

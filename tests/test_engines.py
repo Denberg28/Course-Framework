@@ -29,14 +29,10 @@ class EngineTests(unittest.TestCase):
     def test_flash_reasoning_settings_reach_the_request_wrapper(self):
         prompts = []
         cases = [
-            ('gemini-3.8-flash', 300, {'maxOutputTokens': 32768, 'thinkingConfig': {'thinkingLevel': 'high'}}),
-            ('models/gemini-3.8-flash', 300, {'maxOutputTokens': 32768, 'thinkingConfig': {'thinkingLevel': 'high'}}),
             ('gemini-4-hydrogen', 300, {'maxOutputTokens': 65536, 'thinkingConfig': {'thinkingLevel': 'medium'}}),
             ('models/gemini-4-hydrogen', 300, {'maxOutputTokens': 65536, 'thinkingConfig': {'thinkingLevel': 'medium'}}),
-            ('gemini-4-neon', 300, {'maxOutputTokens': 65536, 'thinkingConfig': {'thinkingLevel': 'medium'}}),
-            ('gemini-4-argon', 300, {'maxOutputTokens': 65536, 'thinkingConfig': {'thinkingLevel': 'medium'}}),
-            ('gemini-4-carbon', 300, {'maxOutputTokens': 65536, 'thinkingConfig': {'thinkingLevel': 'high'}}),
             ('gemini-3.5-flash-lite', None, {'maxOutputTokens': 16384}),
+            ('models/gemini-3.5-flash-lite', None, {'maxOutputTokens': 16384}),
             ('custom-model', None, {'maxOutputTokens': 16384}),
         ]
         for model, expected_timeout, expected_gen_config in cases:
@@ -98,9 +94,9 @@ class EngineTests(unittest.TestCase):
                 generate_course(SAMPLE, '', cfg, transport=lambda *a: answer)
             self.assertIn(expected, str(raised.exception))
             self.assertNotIn('fake-secret', str(raised.exception))
-        carbon_cfg = EngineConfig('Google AI Studio (Gemini)', 'fake-secret', 'gemini-4-carbon')
+        hydrogen_cfg = EngineConfig('Google AI Studio (Gemini)', 'fake-secret', 'gemini-4-hydrogen')
         with self.assertRaisesRegex(CourseError, '65,536-token'):
-            generate_course(SAMPLE, '', carbon_cfg,
+            generate_course(SAMPLE, '', hydrogen_cfg,
                             transport=lambda *a: {'candidates': [{'finishReason': 'MAX_TOKENS', 'content': {'parts': []}}]})
 
     def test_openai_compatible_and_revision(self):

@@ -1,6 +1,6 @@
 # Verification and release gates
 
-Target: **0.4.0-rc.1**, baseline `a84bc35`. Evidence is automated and self-reviewed, with simulated provider responses. Live API and manual Windows/high-DPI/accessibility acceptance remain pending.
+Target: **0.4.1-rc.1**, baseline `4c2d206`. Evidence is automated and self-reviewed, with simulated provider responses. Live API and manual Windows/high-DPI/accessibility acceptance remain pending.
 
 | Gate | Check |
 |---|---|
@@ -91,10 +91,10 @@ Local Python 3.12: 80 tests discovered, 69 passed and 11 native-display skips. F
 
 Inject HTTP 503 while generating the exact one-module Drone 101 outline. Verify the retry repeats the model, full source and high reasoning and the completed response becomes a draft. Check Retry-After, the maximum attempts and that ambiguous failures stop without reposting.
 
-## Gemini 4 agent models, sanitization, and presentation regression (0.4.0-rc.1)
+## Gemini 4 Hydrogen, Flash-Lite, sanitization, and presentation regression (0.4.1-rc.1)
 
-Verify `GEMINI_MODEL_SPECS` and `gemini_request_settings` route `gemini-4-hydrogen`, `gemini-4-neon`, `gemini-4-argon` (`medium` reasoning, 65,536-token cap, 300 s timeout), `gemini-4-carbon` (`high` reasoning, 65,536-token cap, 300 s timeout), `gemini-3.8-flash` (`high` reasoning, 32,768-token cap, 300 s timeout), `gemini-3.5-flash-lite` (16,384-token cap, default 60 s timeout), `models/` aliases, and custom Gemini model IDs through `generateContent`. Verify shared syllabus/reference prompt prefixes remain identical across sequential modules to support Gemini 4 implicit context caching, and verify bounded HTTP 503 overload recovery for all Gemini 4 models without replaying timeouts or 504s.
+Verify `GEMINI_MODEL_SPECS` and `gemini_request_settings` expose only `gemini-3.5-flash-lite` (16,384-token cap, default 60 s timeout) and `gemini-4-hydrogen` (`medium` reasoning, 65,536-token cap, 300 s timeout), plus `models/` aliases through `generateContent`. Verify shared syllabus/reference prompt prefixes remain identical across sequential modules to support Gemini 4 implicit context caching, and verify bounded HTTP 503 overload recovery for both models without replaying timeouts or 504s.
 
 Verify input/output sanitization: path-traversal and malformed model IDs are rejected; raw and URL-encoded reflected API keys are rejected; non-dict/thought parts are discarded safely; `sanitize_generated_markdown` strips C0/C1/bidi controls, outer Markdown code-fence wrappers, raw active HTML tags, and `javascript:`/`data:`/`vbscript:`/`file:` links while preserving math comparisons (`<`, `>`). Verify `export_html` renders Markdown tables, ordered/unordered lists, blockquotes, module TOC anchors, and closed assessment/key/reference details with full HTML escaping and zero scripts.
 
-Verify Streamlit and Windows Tk both expose all Gemini presets and custom model IDs, reset stale/removed session models to Flash-Lite, and restore saved Gemini 4 partial projects. The browser UI fixture validates preset model endpoints and `maxOutputTokens`, and `capture_streamlit.cjs` exercises `gemini-4-hydrogen` alongside `gemini-3.5-flash-lite`. All provider responses are simulated; live API access, paid-tier billing, teaching accuracy, and manual Windows/browser acceptance remain unverified.
+Verify Streamlit and Windows Tk both expose strictly `['gemini-3.5-flash-lite', 'gemini-4-hydrogen']` for Gemini, reset stale/removed Gemini model selections to Flash-Lite, and restore saved Flash-Lite or Hydrogen partial projects. The browser UI fixture validates preset model endpoints and `maxOutputTokens`, and `capture_streamlit.cjs` exercises both `gemini-3.5-flash-lite` and `gemini-4-hydrogen`. All provider responses are simulated; live API access, teaching accuracy, and manual Windows/browser acceptance remain unverified.

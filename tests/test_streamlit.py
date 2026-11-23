@@ -90,15 +90,13 @@ class StreamlitTests(unittest.TestCase):
         self.assertIn('## Module 13: Pre-Deployment Seminar and Internship Requirements', self.app.session_state['content'])
         self.assertEqual(self.app.session_state['source'], source)
 
-    def test_gemini_4_and_flash_models_selectable_and_stale_selection_resets(self):
-        from course_workflow import CUSTOM_MODEL, GEMINI_MODELS
-        self.assertEqual(self.app.selectbox(key='model_choice').options, [*GEMINI_MODELS, CUSTOM_MODEL])
+    def test_only_flash_lite_and_hydrogen_gemini_models_are_offered(self):
+        expected = ['gemini-3.5-flash-lite', 'gemini-4-hydrogen']
+        self.assertEqual(self.app.selectbox(key='model_choice').options, expected)
         self.assertEqual(self.app.session_state['model_choice'], 'gemini-3.5-flash-lite')
-        for model in ('gemini-4-hydrogen', 'gemini-4-neon', 'gemini-4-carbon', 'gemini-4-argon', 'gemini-3.8-flash'):
-            self.assertIn(model, self.app.selectbox(key='model_choice').options)
-        # Stale/removed session model resets cleanly to the default.
+        # Stale/removed Gemini model resets cleanly to the default.
         stale = AppTest.from_file('app.py', default_timeout=30)
-        stale.session_state['model_choice'] = 'removed-legacy-model'
+        stale.session_state['model_choice'] = 'gemini-4-carbon'
         stale.run()
         self.assertEqual(stale.session_state['model_choice'], 'gemini-3.5-flash-lite')
         # Select Gemini 4 Hydrogen and verify endpoint, 65,536 token cap, and medium reasoning.
@@ -119,16 +117,14 @@ class StreamlitTests(unittest.TestCase):
         self.assertEqual(pending['model'], 'gemini-4-hydrogen')
         self.assertIn('## Module 1: drone componenta', pending['completed'][0])
         self.assertEqual(self.app.session_state['generation_status']['text'], 'Draft ready · 1/1 complete')
-        # Verify Gemini 4 Carbon routes with high reasoning and 65,536 token cap.
-        self.app.selectbox(key='model_choice').select('gemini-4-carbon').run()
+        # Switch back to Flash-Lite and verify default endpoint and 16,384 token cap.
+        self.app.selectbox(key='model_choice').select('gemini-3.5-flash-lite').run()
         with patch('engines.request_json', return_value=response()) as send:
             self.click('Generate')
             send.assert_called_once()
-            self.assertIn('/gemini-4-carbon:generateContent', send.call_args.args[0])
-            self.assertEqual(send.call_args.args[2]['generationConfig'], {
-                'maxOutputTokens': 65536, 'thinkingConfig': {'thinkingLevel': 'high'},
-            })
-        self.assertEqual(self.app.session_state['pending']['model'], 'gemini-4-carbon')
+            self.assertIn('/gemini-3.5-flash-lite:generateContent', send.call_args.args[0])
+            self.assertEqual(send.call_args.args[2]['generationConfig'], {'maxOutputTokens': 16384})
+        self.assertEqual(self.app.session_state['pending']['model'], 'gemini-3.5-flash-lite')
 
     def test_direct_generate_use_edit_and_download_survive_rerun(self):
         self.assertEqual(len(self.app.tabs), 0)

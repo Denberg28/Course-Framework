@@ -21,13 +21,8 @@ from reference_catalog import reference_context
 PROVIDERS = ("Local template", "Google AI Studio (Gemini)", "OpenAI-compatible")
 DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite"
 GEMINI_HYDROGEN_MODEL = "gemini-4-hydrogen"
-GEMINI_NEON_MODEL = "gemini-4-neon"
-GEMINI_CARBON_MODEL = "gemini-4-carbon"
-GEMINI_ARGON_MODEL = "gemini-4-argon"
-GEMINI_FLASH_MODEL = "gemini-3.8-flash"
 
 DEFAULT_OUTPUT_LIMIT = 16384
-FLASH_OUTPUT_LIMIT = 32768
 GEMINI4_OUTPUT_LIMIT = 65536
 DEFAULT_TIMEOUT = 60
 FLASH_TIMEOUT = 300
@@ -51,38 +46,6 @@ GEMINI_MODEL_SPECS = {
         "thinking_level": "medium",
         "retry_overload": True,
     },
-    GEMINI_NEON_MODEL: {
-        "label": "Gemini 4 Neon",
-        "summary": "Fast frontier model for dense STEM & knowledge modules · Paid tier · medium reasoning, 65,536-token limit",
-        "output_limit": GEMINI4_OUTPUT_LIMIT,
-        "timeout": FLASH_TIMEOUT,
-        "thinking_level": "medium",
-        "retry_overload": True,
-    },
-    GEMINI_CARBON_MODEL: {
-        "label": "Gemini 4 Carbon",
-        "summary": "Deepest reasoning & verification for complex courses · Paid tier · high reasoning, 65,536-token limit",
-        "output_limit": GEMINI4_OUTPUT_LIMIT,
-        "timeout": FLASH_TIMEOUT,
-        "thinking_level": "high",
-        "retry_overload": True,
-    },
-    GEMINI_ARGON_MODEL: {
-        "label": "Gemini 4 Argon",
-        "summary": "Efficient Gemini 4 frontier reasoning · Paid tier · medium reasoning, 65,536-token limit",
-        "output_limit": GEMINI4_OUTPUT_LIMIT,
-        "timeout": FLASH_TIMEOUT,
-        "thinking_level": "medium",
-        "retry_overload": True,
-    },
-    GEMINI_FLASH_MODEL: {
-        "label": "Gemini 3.8 Flash",
-        "summary": "Reasoning Flash model · high reasoning, 32,768-token limit",
-        "output_limit": FLASH_OUTPUT_LIMIT,
-        "timeout": FLASH_TIMEOUT,
-        "thinking_level": "high",
-        "retry_overload": True,
-    },
 }
 GEMINI_MODEL_IDS = tuple(GEMINI_MODEL_SPECS)
 
@@ -92,18 +55,15 @@ def normalize_gemini_model(model: str) -> str:
 
 
 def gemini_request_settings(model: str) -> dict:
-    """Return bounded transport/thinking settings for a Gemini model ID.
-
-    Unknown/custom model IDs keep conservative defaults instead of guessing thinkingLevel support.
-    """
+    """Return bounded transport/thinking settings for a supported Gemini model ID."""
     canonical = normalize_gemini_model(model)
     spec = GEMINI_MODEL_SPECS.get(canonical)
     if spec is not None:
         return {"model": canonical, **spec}
     return {
         "model": canonical,
-        "label": canonical or "Custom Gemini model",
-        "summary": "Custom Gemini model ID · default 16,384-token limit and 60 s timeout",
+        "label": canonical or "Gemini model",
+        "summary": "Default 16,384-token limit and 60 s timeout",
         "output_limit": DEFAULT_OUTPUT_LIMIT,
         "timeout": DEFAULT_TIMEOUT,
         "thinking_level": None,
@@ -139,10 +99,6 @@ class EngineConfig:
     model: str = DEFAULT_GEMINI_MODEL
     base_url: str = "https://api.openai.com/v1"
     allow_local: bool = False
-
-    @property
-    def is_gemini_flash(self):
-        return self.provider == PROVIDERS[1] and normalize_gemini_model(self.model) == GEMINI_FLASH_MODEL
 
     @property
     def gemini_settings(self):

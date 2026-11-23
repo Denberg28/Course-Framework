@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.1-rc.1 — Retain Gemini 3.5 Flash-Lite and Gemini 4 Hydrogen only
+
+- Restrict Gemini agent model selection in Streamlit, Windows desktop, and `GEMINI_MODEL_SPECS` to **Gemini 3.5 Flash-Lite** (`gemini-3.5-flash-lite`, default) and **Gemini 4 Hydrogen** (`gemini-4-hydrogen`), removing Gemini 4 Neon, Carbon, Argon, 3.8 Flash, and custom Gemini model entries.
+- Preserve existing accepted courses and saved drafts from removed Gemini models for reading/export; stale selections fall back cleanly to Flash-Lite. Offline templates and the separate OpenAI-compatible provider remain available under Settings.
+
 ## 0.4.0-rc.1 — Gemini 4 agent models, sanitization, and presentation upgrade
 
 - Add Google's Gemini 4 agent models (**Gemini 4 Hydrogen** `gemini-4-hydrogen`, **Gemini 4 Neon** `gemini-4-neon`, **Gemini 4 Carbon** `gemini-4-carbon`, **Gemini 4 Argon** `gemini-4-argon`) alongside **Gemini 3.8 Flash** (`gemini-3.8-flash`), **Gemini 3.5 Flash-Lite** (`gemini-3.5-flash-lite`, default), and custom Gemini model IDs in both Streamlit and Windows desktop.

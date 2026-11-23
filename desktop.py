@@ -83,7 +83,7 @@ class CourseMaker:
         label.bind('<Configure>', lambda e: label.configure(wraplength=max(80, e.width)))
         ttk.Button(details, text='Outline', command=self.show_outline).pack(side='right')
         ttk.Label(self.input_panel, text='Agent model', style='Muted.TLabel').pack(anchor='w')
-        self.model_picker = ttk.Combobox(self.input_panel, textvariable=self.model, values=GEMINI_MODELS, state='normal')
+        self.model_picker = ttk.Combobox(self.input_panel, textvariable=self.model, values=GEMINI_MODELS, state='readonly')
         self.model_picker.pack(fill='x', pady=(3, 8))
         ttk.Label(self.input_panel, text='API key', style='Muted.TLabel').pack(anchor='w')
         self.key_entry = ttk.Entry(self.input_panel, textvariable=self.key, show='•')
@@ -193,7 +193,7 @@ class CourseMaker:
         self.key.set('')
         self.consent.set(False)
         if self.provider.get() == PROVIDERS[1]:
-            self.model_picker.configure(values=GEMINI_MODELS, state='normal')
+            self.model_picker.configure(values=GEMINI_MODELS, state='readonly')
             self.model.set(GEMINI_MODELS[0])
         elif self.provider.get() == PROVIDERS[0]:
             self.model_picker.configure(values=['Offline template'], state='readonly')
@@ -233,8 +233,10 @@ class CourseMaker:
             messagebox.showinfo('Outline', '\n'.join(lines), parent=self.root)
 
     def config(self):
-        return EngineConfig(self.provider.get(), self.key.get(), self.model.get().strip(),
-                            self.endpoint.get().strip(), allow_local=True)
+        provider = self.provider.get()
+        chosen = self.model.get().strip()
+        model = (chosen if chosen in GEMINI_MODELS else GEMINI_MODELS[0]) if provider == PROVIDERS[1] else chosen
+        return EngineConfig(provider, self.key.get(), model, self.endpoint.get().strip(), allow_local=True)
 
     def indices(self):
         if self.scope.get() == 'All modules':
@@ -267,7 +269,10 @@ class CourseMaker:
         if self.job and self.job['provider'] in PROVIDERS:
             self.provider.set(self.job['provider'])
             self.provider_changed()
-            if self.job['provider'] != PROVIDERS[0]:
+            if self.job['provider'] == PROVIDERS[1]:
+                canonical = self.job['model'].removeprefix('models/')
+                self.model.set(canonical if canonical in GEMINI_MODELS else GEMINI_MODELS[0])
+            elif self.job['provider'] == PROVIDERS[2]:
                 self.model.set(self.job['model'])
         self.view.set('Draft' if self.job else 'Course')
         self.refresh_draft()
@@ -296,7 +301,11 @@ class CourseMaker:
         if path:
             try:
                 self.set_project(load_project(read_file(path)), Path(path))
-                self.status.set('Project opened · enter your session key to resume a draft')
+                if (self.job and not is_complete(self.job) and self.job['provider'] == PROVIDERS[1]
+                        and self.job['model'].removeprefix('models/') not in GEMINI_MODELS):
+                    self.status.set('Previous draft available · Generate starts a new draft with the selected Gemini model')
+                else:
+                    self.status.set('Project opened · enter your session key to resume a draft')
             except (CourseError, OSError) as error:
                 self.error(error)
 

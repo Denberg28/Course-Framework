@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.2-rc.1 — Effective learning-material instruction optimization and quality review
+
+- Restructure `MODULE_SYSTEM` and `SYSTEM` in `engines.py` into a clear, classroom-ready instructional blueprint: direct teaching explanations (forbidding teacher meta-directions), measurable Bloom's objectives mapped to supplied outcomes (or labeled `[Draft objective]` when absent), 3–5 slide-ready presentation segments with misconceptions/visual cues and open-ended discussion prompts, complete step-by-step worked examples (quantitative or qualitative/scenario-based), practical activities with success criteria, and balanced, non-trivial 5-item MCQs. Raise the module depth target from 600–900 to 1,100–1,600 words so lessons are substantive rather than outline stubs.
+- Add `_build_module_prompt` with course sequence boundaries (`Module N of M`, previous/next module titles), learner prerequisite level, subtopic decomposition guidance when subtopics are unlisted, and adaptive allocation guidance so lecture-only (AE 417) and unassigned (informal) inputs no longer receive misleading laboratory-hour instructions. Keep the shared syllabus/reference prefix unchanged for Gemini 4 implicit context caching.
+- Upgrade `sanitize_generated_markdown` to normalize benign LLM bold headings and bold/blank-lined Answer key entries, and expand `lesson_review_notes` to report all structural and quality findings in one pass (missing sections/subsections, fewer than 3 presentation segments, duplicate MCQ options, uniform answer-key letter bias, and unfilled `[TODO]`/`[Insert]` placeholders).
+- Preserve explicit `<ol start="N">` numbering in `export_html` so multi-part Presentation sequences and Assessment questions never restart at `1.` in HTML lesson presentations.
+
 ## 0.4.1-rc.1 — Retain Gemini 3.5 Flash-Lite and Gemini 4 Hydrogen only
 
 - Restrict Gemini agent model selection in Streamlit, Windows desktop, and `GEMINI_MODEL_SPECS` to **Gemini 3.5 Flash-Lite** (`gemini-3.5-flash-lite`, default) and **Gemini 4 Hydrogen** (`gemini-4-hydrogen`), removing Gemini 4 Neon, Carbon, Argon, 3.8 Flash, and custom Gemini model entries.

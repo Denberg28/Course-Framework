@@ -66,6 +66,40 @@ class EngineTests(unittest.TestCase):
         self.assertIn('<syllabus>', prefix)
         self.assertIn('<syllabus_references>', prefix)
 
+    def test_module_prompt_adapts_sequence_boundaries_and_allocation_to_input_type(self):
+        from pathlib import Path
+        cfg = EngineConfig('Google AI Studio (Gemini)', 'fake-secret', 'gemini-4-hydrogen')
+        # 1. Lecture + lab syllabus (AE 416): includes lab framing, outcomes, prerequisite, and neighbors.
+        ae416 = Path('examples/AE416-syllabus.txt').read_text(encoding='utf-8')
+        seen = []
+        generate_course(ae416, '', cfg, module_index=1, transport=lambda u, h, p: (seen.append(p), response())[1])
+        user_text = seen[-1]['contents'][0]['parts'][0]['text']
+        sys_text = seen[-1]['systemInstruction']['parts'][0]['text']
+        self.assertIn('(Module 2 of 5)', user_text)
+        self.assertIn('Previous module = Nature and Characteristics of Research', user_text)
+        self.assertIn('Next module = Review of Related Literature', user_text)
+        self.assertIn('Target learner level / prerequisite: Fourth Year Standing', user_text)
+        self.assertIn('within the laboratory allocation', user_text)
+        self.assertIn('1,100–1,600 words', sys_text)
+        self.assertIn('never write meta-directions', sys_text)
+        self.assertNotIn('catalog', (user_text + sys_text).lower())
+        # 2. Lecture-only syllabus (AE 417): classroom/applied exercise, no laboratory allocation phrasing.
+        ae417 = Path('examples/AE417-syllabus.md').read_text(encoding='utf-8')
+        generate_course(ae417, '', cfg, module_index=0, transport=lambda u, h, p: (seen.append(p), response())[1])
+        ae417_text = seen[-1]['contents'][0]['parts'][0]['text']
+        self.assertIn('(Module 1 of 13)', ae417_text)
+        self.assertIn('Previous module = None (opening module)', ae417_text)
+        self.assertIn('no laboratory hours are assigned', ae417_text)
+        self.assertNotIn('within the laboratory allocation', ae417_text)
+        # 3. Informal topic list (drone 101): unassigned hours, draft objective instruction, final module marker.
+        drone = Path('examples/drone101-topics.txt').read_text(encoding='utf-8')
+        generate_course(drone, '', cfg, module_index=1, transport=lambda u, h, p: (seen.append(p), response())[1])
+        drone_text = seen[-1]['contents'][0]['parts'][0]['text']
+        self.assertIn('(Module 2 of 2)', drone_text)
+        self.assertIn('Next module = None (final module)', drone_text)
+        self.assertIn('Schedule and contact hours are unassigned', drone_text)
+        self.assertIn('propose 2–3 measurable draft learning objectives', drone_text)
+
     def test_extended_timeout_is_applied_once_and_errors_are_distinct(self):
         for error in (TimeoutError('fake-secret'), URLError(TimeoutError('fake-secret')),
                       URLError('fake-secret'), HTTPError('https://fake-secret', 504, 'fake-secret', {}, io.BytesIO())):

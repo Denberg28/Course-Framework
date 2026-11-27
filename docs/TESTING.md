@@ -1,6 +1,6 @@
 # Verification and release gates
 
-Target: **0.4.1-rc.1**, baseline `4c2d206`. Evidence is automated and self-reviewed, with simulated provider responses. Live API and manual Windows/high-DPI/accessibility acceptance remain pending.
+Target: **0.4.2-rc.1**, baseline `82ca435`. Evidence is automated and self-reviewed, with simulated provider responses. Live API and manual Windows/high-DPI/accessibility acceptance remain pending.
 
 | Gate | Check |
 |---|---|
@@ -97,4 +97,8 @@ Verify `GEMINI_MODEL_SPECS` and `gemini_request_settings` expose only `gemini-3.
 
 Verify input/output sanitization: path-traversal and malformed model IDs are rejected; raw and URL-encoded reflected API keys are rejected; non-dict/thought parts are discarded safely; `sanitize_generated_markdown` strips C0/C1/bidi controls, outer Markdown code-fence wrappers, raw active HTML tags, and `javascript:`/`data:`/`vbscript:`/`file:` links while preserving math comparisons (`<`, `>`). Verify `export_html` renders Markdown tables, ordered/unordered lists, blockquotes, module TOC anchors, and closed assessment/key/reference details with full HTML escaping and zero scripts.
 
-Verify Streamlit and Windows Tk both expose strictly `['gemini-3.5-flash-lite', 'gemini-4-hydrogen']` for Gemini, reset stale/removed Gemini model selections to Flash-Lite, and restore saved Flash-Lite or Hydrogen partial projects. The browser UI fixture validates preset model endpoints and `maxOutputTokens`, and `capture_streamlit.cjs` exercises both `gemini-3.5-flash-lite` and `gemini-4-hydrogen`. All provider responses are simulated; live API access, teaching accuracy, and manual Windows/browser acceptance remain unverified.
+Verify Streamlit and Windows Tk both expose strictly `['gemini-3.5-flash-lite', 'gemini-4-hydrogen']` for Gemini, reset stale/removed Gemini model selections to Flash-Lite, and restore saved Flash-Lite or Hydrogen partial projects. The browser UI fixture validates preset model endpoints and `maxOutputTokens`, and `capture_streamlit.cjs` exercises both `gemini-3.5-flash-lite` and `gemini-4-hydrogen`.
+
+## Learning-material instruction & quality review regression (0.4.2-rc.1)
+
+Verify `_build_module_prompt` injects sequence boundaries (`Module N of M`, previous/next module titles), prerequisite level, outcome alignment, and adaptive allocation guidance across lecture+lab (AE 416), lecture-only (AE 417 — no laboratory allocation phrasing), and unassigned informal topic lists (`drone 101`) while keeping the shared syllabus/reference prompt prefix identical across modules. Verify `sanitize_generated_markdown` normalizes bold headings and bold/blank-lined Answer key entries without triggering false review notes. Verify `lesson_review_notes` collects multiple findings in a single pass (fewer than 3 presentation segments, duplicate MCQ options, uniform answer-key letter bias, and unfilled `[TODO]`/`[Insert]` placeholders). Verify `export_html` emits `<ol start="N">` so numbered items in Presentation sequences and Assessment questions continue sequentially. All provider responses are simulated; live Gemini teaching quality and manual Windows/browser acceptance remain pending.

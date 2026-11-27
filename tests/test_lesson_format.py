@@ -143,4 +143,31 @@ class LessonFormatTests(unittest.TestCase):
         self.assertIn('<table><thead><tr><th>Module</th>', page)
         self.assertIn('<blockquote>Draft · instructor review required.</blockquote>', page)
         self.assertIn('<ol><li>Begin with a diagram', page)
+        self.assertIn('<ol start="2"><li>What should be stated', page)
+        self.assertIn('<ol start="5"><li>What makes the explanation', page)
         self.assertNotIn('<script>', page)
+
+    def test_sanitize_normalizes_bold_headings_and_answer_key_without_false_notes(self):
+        from lesson_format import lesson_review_notes, sanitize_generated_markdown
+        styled = (MODULE
+                  .replace('#### Introduction', '#### **Introduction**')
+                  .replace('### Activity', '### **Activity**:')
+                  .replace('1. A\n2. B\n3. C\n4. D\n5. A', '1. **A**\n\n2. **B**\n\n3. **C**\n\n4. **D**\n\n5. **A**'))
+        cleaned = sanitize_generated_markdown(styled)
+        validate_lesson(cleaned)
+        self.assertEqual(lesson_review_notes(cleaned), [])
+
+    def test_review_notes_collect_multiple_quality_and_structure_issues(self):
+        from lesson_format import lesson_review_notes
+        flawed = (MODULE
+                  .replace('2. Follow the force', '- Follow the force')
+                  .replace('3. Discuss how', '- Discuss how')
+                  .replace('#### Summary\n', '#### Summary\n[TODO: add chart]\n')
+                  .replace('B. The paint colour', 'B. The applied load')
+                  .replace('1. A\n2. B\n3. C\n4. D\n5. A', '1. B\n2. B\n3. B\n4. B\n5. B'))
+        notes = lesson_review_notes(flawed)
+        joined = '\n'.join(notes)
+        self.assertIn('fewer than 3 numbered teaching segments', joined)
+        self.assertIn('duplicate options', joined)
+        self.assertIn('All five answer key letters are identical', joined)
+        self.assertIn('unfilled placeholder markers', joined)

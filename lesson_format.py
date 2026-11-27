@@ -18,6 +18,24 @@ _UNSAFE_BARE_URI = re.compile(r'(?i)\b(?:javascript|vbscript):[^\s<>"\)]+|data:t
 _OUTER_FENCE = re.compile(r'^\s*```(?:markdown|md)?\s*\n(.*?)\n```\s*$', re.I | re.S)
 
 
+_BOLD_HEADING = re.compile(r'(?m)^(#{3,4})\s+\*\*([^*]+?)\*\*\s*:?\s*$')
+_PLACEHOLDER_LEAK = re.compile(r'\[(?:todo|tbd|insert|placeholder)(?:[:\s-][^\]]*)?\]', re.I)
+
+
+def _normalize_answer_key_block(text: str) -> str:
+    def clean_key(match):
+        body = match[2]
+        cleaned_lines = []
+        for raw in body.splitlines():
+            line = raw.strip()
+            if not line:
+                continue
+            bold_entry = re.fullmatch(r'\*{0,2}([1-5])[.)]\*{0,2}\s*\*{0,2}([A-D])\*{0,2}\.?', line)
+            cleaned_lines.append(f'{bold_entry[1]}. {bold_entry[2]}' if bold_entry else line)
+        return f"{match[1]}\n" + "\n".join(cleaned_lines) + "\n"
+    return re.sub(r'(?ims)(^###\s+Answer key)\s*\n(.*?)(?=^#{1,3}\s|\Z)', clean_key, text)
+
+
 def sanitize_generated_markdown(text: str) -> str:
     """Sanitize untrusted model Markdown while preserving teaching prose and math."""
     text = text.replace('\r\n', '\n').replace('\r', '\n')
@@ -28,6 +46,8 @@ def sanitize_generated_markdown(text: str) -> str:
     text = _DANGEROUS_HTML_BLOCKS.sub('', text)
     text = _UNSAFE_MD_LINK.sub(lambda m: (m[1].strip() + ' ' if m[1].strip() else '') + '[unsafe link removed]', text)
     text = _UNSAFE_BARE_URI.sub('[unsafe link removed]', text)
+    text = _BOLD_HEADING.sub(r'\1 \2', text)
+    text = _normalize_answer_key_block(text)
     text = '\n'.join(line.rstrip() for line in text.splitlines())
     text = re.sub(r'\n{3,}', '\n\n', text)
     return text.strip()
@@ -35,6 +55,11 @@ def sanitize_generated_markdown(text: str) -> str:
 
 def section_body(text, heading):
     match = re.search(r'(?ims)^###\s+' + re.escape(heading) + r'\s*\n(.*?)(?=^#{1,3}\s|\Z)', text)
+    return match[1].strip() if match else ''
+
+
+def _subsection_body(section_text, heading):
+    match = re.search(r'(?ims)^####\s+' + re.escape(heading) + r'\s*\n(.*?)(?=^#{1,4}\s|\Z)', section_text)
     return match[1].strip() if match else ''
 
 
@@ -58,21 +83,66 @@ def validate_lesson(text):
         if re.findall(r'(?m)^\s*([A-D])[.)]\s+\S', question) != ['A', 'B', 'C', 'D']:
             raise CourseError('Each question needs options A–D. Retry this module.')
     key = section_body(text, 'Answer key')
-    entries = re.findall(r'(?m)^\s*([1-5])[.)]\s*([A-D])\s*$', key)
+    non_empty = [line.strip() for line in key.splitlines() if line.strip()]
+    entries = re.findall(r'(?m)^\s*([1-5])[.)]\s*([A-D])\s*$', '\n'.join(non_empty))
     if [number for number, letter in entries] != ['1', '2', '3', '4', '5']:
         raise CourseError('The answer key needs five numbered letters, for example 1. B. Retry this module.')
-    if len(key.splitlines()) != 5:
+    if len(non_empty) != 5:
         raise CourseError('Use only numbered answer letters in the answer key.')
 
 
 def lesson_review_notes(text):
-    """Formatting is advisory when generating; retain useful completed drafts."""
-    try:
-        validate_lesson(text)
-    except CourseError as error:
-        note = str(error).split(' Completed modules')[0].split(' Retry this module')[0]
-        return [note.rstrip('.') + '. Check the draft before teaching.']
-    return []
+    """Collect advisory structural and quality notes without rejecting completed drafts."""
+    notes = []
+    missing_sections = [heading for heading in SECTIONS
+                        if not re.sub(r'(?m)^#+.*$', '', section_body(text, heading)).strip()]
+    for heading in missing_sections:
+        notes.append(f'The module is missing {heading.lower()}. Check the draft before teaching.')
+    discussion = section_body(text, DISCUSSION)
+    if discussion:
+        missing_parts = [part for part in ('Introduction', 'Presentation sequence', 'Worked example', 'Summary')
+                         if not re.search(r'(?im)^####\s+' + part + r'\s*$', discussion)]
+        if missing_parts:
+            notes.append(f"The presentation sequence is missing {', '.join(missing_parts)}. Check the draft before teaching.")
+        if len(re.findall(r'\b\w+\b', discussion)) < 60:
+            notes.append('The module discussion is too short to review as a lesson. Check the draft before teaching.')
+        sequence = _subsection_body(discussion, 'Presentation sequence')
+        if sequence and len(re.findall(r'(?m)^\s*\d+[.)]\s+\S', sequence)) < 3:
+            notes.append('Presentation sequence has fewer than 3 numbered teaching segments. Check the draft before teaching.')
+    questions = section_body(text, 'Assessment')
+    if questions:
+        chunks = re.split(r'(?m)^\s*([1-5])[.)]\s+', questions)
+        numbers = chunks[1::2]
+        if numbers != ['1', '2', '3', '4', '5']:
+            notes.append('Assessment must contain questions 1–5. Check the draft before teaching.')
+        else:
+            bad_options, duplicate_options = False, False
+            for question in chunks[2::2]:
+                opts = re.findall(r'(?m)^\s*([A-D])[.)]\s+(.+)$', question)
+                if [letter for letter, _ in opts] != ['A', 'B', 'C', 'D']:
+                    bad_options = True
+                else:
+                    normalized = [re.sub(r'\s+', ' ', label.strip().lower()) for _, label in opts]
+                    if len(set(normalized)) != 4:
+                        duplicate_options = True
+            if bad_options:
+                notes.append('Each question needs options A–D. Check the draft before teaching.')
+            if duplicate_options:
+                notes.append('One or more assessment questions contain duplicate options. Check the draft before teaching.')
+    key = section_body(text, 'Answer key')
+    if key:
+        non_empty = [line.strip() for line in key.splitlines() if line.strip()]
+        entries = re.findall(r'(?m)^\s*([1-5])[.)]\s*([A-D])\s*$', '\n'.join(non_empty))
+        if [number for number, letter in entries] != ['1', '2', '3', '4', '5']:
+            notes.append('The answer key needs five numbered letters, for example 1. B. Check the draft before teaching.')
+        else:
+            if len(non_empty) != 5:
+                notes.append('Use only numbered answer letters in the answer key. Check the draft before teaching.')
+            if len({letter for _, letter in entries}) == 1:
+                notes.append('All five answer key letters are identical; review option balance before teaching.')
+    if _PLACEHOLDER_LEAK.search(text):
+        notes.append('Draft contains unfilled placeholder markers ([TODO]/[Insert]); complete them before teaching.')
+    return notes
 
 
 def presentation_parts(text):

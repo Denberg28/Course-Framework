@@ -10,7 +10,7 @@ import re
 import tempfile
 import zipfile
 
-VERSION = "0.4.1-rc.1"
+VERSION = "0.4.2-rc.1"
 MAX_FILE_BYTES = 8 * 1024 * 1024
 MAX_TEXT = 180_000
 MAX_OUTPUT = 400_000
@@ -589,12 +589,15 @@ def export_html(title: str, content: str) -> bytes:
                     i += 1
                 out.append('<ul>' + ''.join(f'<li>{inline(item)}</li>' for item in items) + '</ul>')
                 continue
-            if re.match(r'^\s*\d+[.)]\s+\S', line):
+            ordered = re.match(r'^\s*(\d+)[.)]\s+\S', line)
+            if ordered:
+                start_num = int(ordered[1])
                 items = []
                 while i < len(raw_lines) and re.match(r'^\s*\d+[.)]\s+\S', raw_lines[i]):
                     items.append(re.sub(r'^\s*\d+[.)]\s+', '', raw_lines[i]))
                     i += 1
-                out.append('<ol>' + ''.join(f'<li>{inline(item)}</li>' for item in items) + '</ol>')
+                tag = f'<ol start="{start_num}">' if start_num != 1 else '<ol>'
+                out.append(tag + ''.join(f'<li>{inline(item)}</li>' for item in items) + '</ol>')
                 continue
             out.append('<p>' + inline(line) + '</p>')
             i += 1
